@@ -1,7 +1,11 @@
-from common import *
+from common import np_softmax
+import os
 import itertools
+import numpy as np
+import torch
+from torch.autograd import Variable
 
-from net.lib.box.process import*
+from net.lib.box.process import gpu_nms, clip_boxes, filter_boxes
 
 
 #------------------------------------------------------------------------------

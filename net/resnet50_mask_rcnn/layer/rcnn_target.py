@@ -1,7 +1,8 @@
 # reference:  https://github.com/rbgirshick/py-faster-rcnn/blob/master/lib/rpn/anchor_target_layer.py
-from common import *
-from utility.draw import*
-from net.lib.box.process import*
+import copy
+from net.lib.box.process import is_small_box
+from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_overlap
+
 
 if __name__ == '__main__':
     from rcnn_nms     import *

@@ -1,4 +1,10 @@
-from common import *
+import os
+import cv2
+import math
+import random
+import skimage
+import skimage.morphology
+import numpy as np
 
 
 ## for debug
@@ -251,7 +257,7 @@ def pad_to_factor(image, factor=16):
     w = math.ceil(width/factor)*factor
 
     image = cv2.copyMakeBorder(image, top=0, bottom=h-height, left=0, right=w-width,
-                               borderType= cv2.BORDER_REFLECT101, value=[0,0,0] )
+                               borderType=cv2.BORDER_REFLECT101, value=[0, 0, 0])
 
     return image
 

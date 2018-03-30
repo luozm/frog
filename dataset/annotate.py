@@ -1,7 +1,11 @@
-from common import *
-from utility.file import *
-from utility.draw import *
-from dataset.reader import *
+import os
+import cv2
+import glob
+import numpy as np
+
+from dataset.reader import multi_mask_to_contour_overlay, multi_mask_to_color_overlay
+from common import DATA_DIR
+from utility.file import read_list_from_file
 
 
 def run_make_test_annotation():

@@ -1,4 +1,6 @@
-from common import *
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.parallel import data_parallel
 from net.lib.roi_align_pool_tf.module import RoIAlign as Crop
 
 
@@ -614,6 +616,7 @@ def run_check_mask_net():
     inputs = Variable(torch.from_numpy(inputs)).cuda()
 
     cfg = Configuration()
+    # <todo> cannot find MaskSingleShotNet
     mask_net = MaskSingleShotNet(cfg).cuda()
 
     mask_net.set_mode('eval')

@@ -1,5 +1,8 @@
-from common import *
+import os
+import sys
+import shutil
 import builtins
+
 
 # log ------------------------------------
 def remove_comments(lines, token='#'):

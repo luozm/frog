@@ -1,7 +1,9 @@
-from common import *
-from utility.draw import*
-
-from net.lib.box.process import*
+import os
+import numpy as np
+import torch
+from common import np_sigmoid
+from torch.autograd import Variable
+from net.lib.box.process import gpu_nms, box_transform, box_transform_inv, clip_boxes, filter_boxes
 
 
 ## faster-rcnn box encode/decode  ---------------------------------
@@ -133,13 +135,6 @@ def rcnn_nms(cfg, mode, inputs, proposals, logits, deltas ):
     return detections
 
 
-
-
-#-----------------------------------------------------------------------------  
+# -----------------------------------------------------------------------------
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
-
-
-
- 
- 
+    print('%s: calling main function ... ' % os.path.basename(__file__))

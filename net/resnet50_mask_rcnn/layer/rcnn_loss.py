@@ -1,4 +1,8 @@
-from common import *
+import os
+import torch
+import torch.nn.functional as F
+from torch.autograd import Variable
+
 #---------------------------------------------------------------------------
 
 # ##  https://discuss.pytorch.org/t/bceloss-from-scratch/2655/3

@@ -1,6 +1,13 @@
-from common import *
-from utility.draw import *
-from net.lib.box.process import*
+import os
+import cv2
+import copy
+import torch
+import numpy as np
+from torch.autograd import Variable
+
+from utility.draw import image_show
+from net.lib.box.process import is_small_box
+from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_overlap
 
 
 def add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label, score=-1):

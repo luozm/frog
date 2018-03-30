@@ -1,17 +1,39 @@
-from common import *
-from utility.file   import *
-from dataset.reader import *
-from net.rate   import *
-from net.metric import *
+"""
+Main training script
+"""
+from common import RESULTS_DIR, SEED, IDENTIFIER, PROJECT_PATH, np_softmax
+
+import os
+import cv2
+import time
+import pickle
+import torch
+import numpy as np
+from timeit import default_timer as timer
+from torch import optim
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler, SequentialSampler
+
+from utility.file import Logger, time_to_str
+from utility.draw import image_show
+from dataset.reader import ScienceDataset
+from net.rate import get_learning_rate, adjust_learning_rate
 from net.resnet50_mask_rcnn.configuration import Configuration
+from net.resnet50_mask_rcnn.draw import multi_mask_to_annotation, mask_to_inner_contour, \
+    instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
+from dataset.transform import random_shift_scale_rotate_transform2,\
+    random_crop_transform2, random_horizontal_flip_transform2,\
+    random_vertical_flip_transform2, random_rotate90_transform2, fix_crop_transform2
+
 
 # -------------------------------------------------------------------------------------
 #WIDTH, HEIGHT = 128,128
 #WIDTH, HEIGHT = 192,192
 WIDTH, HEIGHT = 256, 256
 
-from net.resnet50_mask_rcnn.draw import *
-from net.resnet50_mask_rcnn.model import *
+
+from net.resnet50_mask_rcnn.model import MaskRcnnNet
 # -------------------------------------------------------------------------------------
 
 
@@ -492,15 +514,13 @@ def run_train():
             'optimizer': optimizer.state_dict(),
             'iter'     : i,
             'epoch'    : epoch,
-        }, out_dir + '/checkpoint/%d_optimizer.pth'%(i))
+        }, out_dir + '/checkpoint/%d_optimizer.pth' % i)
 
     log.write('\n')
 
 
-
-# main #################################################################
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
+    print('%s: calling main function ... ' % os.path.basename(__file__))
 
     run_train()
 

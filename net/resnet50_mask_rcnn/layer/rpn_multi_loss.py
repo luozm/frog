@@ -26,7 +26,10 @@ class SmoothL1Loss(_Loss):
 ##-----------------------------------------------------------------
 
 
-from common import *
+import os
+import torch
+import torch.nn.functional as F
+
 
 # focal loss
 # https://github.com/andreaazzini/retinanet.pytorch/blob/master/loss.py

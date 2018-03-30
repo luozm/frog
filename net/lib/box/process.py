@@ -1,5 +1,7 @@
-from common import *
-from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_overlap
+import common
+import os
+import torch
+import numpy as np
 from net.lib.box.nms.torch_nms import torch_nms
 from net.lib.box.nms.gpu_nms.gpu_nms import gpu_nms
 from net.lib.box.nms.cython_nms.cython_nms import cython_nms
@@ -249,6 +251,7 @@ def filter_boxes(boxes, min_size):
     keep = np.where((ws >= min_size) & (hs >= min_size))[0]
     return keep
 
+
 def is_small_box_at_boundary(box,W,H, min_size):
     x0,y0,x1,y1 = box
     w = (x1-x0)+1
@@ -259,7 +262,6 @@ def is_small_box_at_boundary(box,W,H, min_size):
            ((y0==0 or y1==H-1) and (h<min_size))
 
 
-
 def is_small_box(box, min_size):
     x0,y0,x1,y1 = box
     w = (x1-x0)+1
@@ -267,6 +269,7 @@ def is_small_box(box, min_size):
     aspect = max(w,h)/min(w,h)
     area = w*h
     return (w <min_size or h<min_size)
+
 
 def is_big_box(box, max_size):
     x0,y0,x1,y1 = box

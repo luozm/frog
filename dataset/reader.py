@@ -1,18 +1,26 @@
-from common import *
+"""
+Dataset & utils
+"""
+import os
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from timeit import default_timer as timer
+from torch.utils.data.dataset import Dataset
+from torch.utils.data.sampler import RandomSampler
 
-from dataset.transform import *
-from dataset.sampler import *
-from utility.file import *
-from utility.draw import *
+from common import DATA_DIR
+from utility.file import read_list_from_file
+from utility.draw import image_show
+from net.lib.box.process import is_big_box, is_small_box, is_small_box_at_boundary
 
-from net.lib.box.process import *
 
-#data reader  ----------------------------------------------------------------
-MIN_SIZE =  6
-MAX_SIZE =  128  #np.inf
+MIN_SIZE = 6
+MAX_SIZE = 128  #np.inf
 IGNORE_BOUNDARY = -1
-IGNORE_SMALL    = -2
-IGNORE_BIG      = -3
+IGNORE_SMALL = -2
+IGNORE_BIG = -3
+
 
 class ScienceDataset(Dataset):
 
@@ -24,26 +32,24 @@ class ScienceDataset(Dataset):
         self.transform = transform
         self.mode = mode
 
-        #read split
+        # read split
         ids = read_list_from_file(DATA_DIR + '/split/' + split, comment='#')
 
-
-        #save
+        # save
         self.ids = ids
 
-        #print
-        print('\ttime = %0.2f min'%((timer() - start) / 60))
-        print('\tnum_ids = %d'%(len(self.ids)))
+        print('\ttime = %0.2f min' % ((timer() - start) / 60))
+        print('\tnum_ids = %d' % (len(self.ids)))
         print('')
 
     def __getitem__(self, index):
         id = self.ids[index]
-        name   = id.split('/')[-1]
+        name = id.split('/')[-1]
         folder = id.split('/')[0]
         image = cv2.imread(DATA_DIR + '/image/%s/images/%s.png'%(folder,name), cv2.IMREAD_COLOR)
 
         if self.mode in ['train']:
-            multi_mask = np.load( DATA_DIR + '/image/%s/multi_masks/%s.npy'%(folder,name)).astype(np.int32)
+            multi_mask = np.load(DATA_DIR + '/image/%s/multi_masks/%s.npy'%(folder,name)).astype(np.int32)
             meta = '<not_used>'
 
             if self.transform is not None:
@@ -115,9 +121,9 @@ def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255,255,255]):
 def mask_to_outer_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
     contour = (~mask) & (
-            (pad[1:-1,1:-1] != pad[:-2,1:-1]) \
-          | (pad[1:-1,1:-1] != pad[2:,1:-1])  \
-          | (pad[1:-1,1:-1] != pad[1:-1,:-2]) \
+            (pad[1:-1,1:-1] != pad[:-2,1:-1])
+          | (pad[1:-1,1:-1] != pad[2:,1:-1])
+          | (pad[1:-1,1:-1] != pad[1:-1,:-2])
           | (pad[1:-1,1:-1] != pad[1:-1,2:])
     )
     return contour
@@ -125,9 +131,9 @@ def mask_to_outer_contour(mask):
 def mask_to_inner_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
     contour = mask & (
-            (pad[1:-1,1:-1] != pad[:-2,1:-1]) \
-          | (pad[1:-1,1:-1] != pad[2:,1:-1])  \
-          | (pad[1:-1,1:-1] != pad[1:-1,:-2]) \
+            (pad[1:-1,1:-1] != pad[:-2,1:-1])
+          | (pad[1:-1,1:-1] != pad[2:,1:-1])
+          | (pad[1:-1,1:-1] != pad[1:-1,:-2])
           | (pad[1:-1,1:-1] != pad[1:-1,2:])
     )
     return contour
@@ -285,7 +291,6 @@ def instance_to_multi_mask(instance):
 #     return center, delta
 
 
-
 # check ##################################################################################3
 def run_check_dataset_reader():
 
@@ -297,16 +302,12 @@ def run_check_dataset_reader():
         'train1_ids_gray2_500', mode='train',
         #'disk0_ids_dummy_9', mode='train',
         #'merge1_1', mode='train',
-        transform = augment,
+        transform=augment,
     )
     #sampler = SequentialSampler(dataset)
     sampler = RandomSampler(dataset)
 
-
     for n in iter(sampler):
-    #for n in range(10):
-    #n=0
-    #while 1:
         image, multi_mask, box, label, instance, meta, index = dataset[n]
 
         print('n=%d------------------------------------------'%n)
@@ -330,14 +331,14 @@ def run_check_dataset_reader():
             cv2.rectangle(image1,(x0,y0),(x1,y1),(0,255,255),2)
             cv2.rectangle(color_overlay1,(x0,y0),(x1,y1),(0,255,255),2)
             cv2.rectangle(contour_overlay1,(x0,y0),(x1,y1),(0,255,255),2)
-            image_show('instance[i]',np.hstack([instance1, image1,color_overlay1,contour_overlay1]))
+#            image_show('instance[i]',np.hstack([instance1, image1,color_overlay1,contour_overlay1]))
 #            cv2.waitKey(0)
 
 
 # main #################################################################
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
+    print('%s: calling main function ... ' % os.path.basename(__file__))
 
     run_check_dataset_reader()
 
-    print( 'sucess!')
+    print('sucess!')

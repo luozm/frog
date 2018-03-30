@@ -1,4 +1,6 @@
-from common import *
+import os
+import torch
+from torch.autograd import Variable
 
 
 def weighted_binary_cross_entropy_with_logits(logits, labels, weights):
@@ -37,9 +39,6 @@ def mask_loss(logits, labels, instances):
     return loss
 
 
-
-# #-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
-
- 
+    print('%s: calling main function ... ' % os.path.basename(__file__))
