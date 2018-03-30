@@ -1,0 +1,157 @@
+
+--- [START 2018-03-30_14-32-39] ----------------------------------------------------------------
+
+** some experiment setting **
+	SEED         = 35202
+	PROJECT_PATH = /media/lzm/DC9458A6945884C4/projects/frog
+	out_dir      = /media/lzm/DC9458A6945884C4/projects/frog/results/mask-rcnn-50-gray500-02
+
+** net setting **
+<class 'net.resnet50_mask_rcnn.model.MaskRcnnNet'>
+
+net version 'mask-rcnn-resnet50-fpn'
+
+** dataset setting **
+	WIDTH, HEIGHT = 256, 256
+	train_dataset.split = disk0_ids_dummy_9
+	valid_dataset.split = disk0_ids_dummy_9
+	len(train_dataset)  = 9
+	len(valid_dataset)  = 9
+	len(train_loader)   = 0
+	len(valid_loader)   = 1
+	batch_size  = 16
+	iter_accum  = 1
+	batch_size*iter_accum  = 16
+
+** start training here! **
+ optimizer=SGD (
+Parameter Group 0
+    dampening: 0
+    lr: 0.01
+    momentum: 0.9
+    nesterov: False
+    weight_decay: 0.0001
+)
+ momentum=0.900000
+ LR=None
+
+ images_per_epoch = 9
+
+ rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          
+-------------------------------------------------------------------------------------------------------------------------------
+
+--- [START 2018-03-30_14-35-24] ----------------------------------------------------------------
+
+** some experiment setting **
+	SEED         = 35202
+	PROJECT_PATH = /media/lzm/DC9458A6945884C4/projects/frog
+	out_dir      = /media/lzm/DC9458A6945884C4/projects/frog/results/mask-rcnn-50-gray500-02
+
+** net setting **
+<class 'net.resnet50_mask_rcnn.model.MaskRcnnNet'>
+
+net version 'mask-rcnn-resnet50-fpn'
+
+** dataset setting **
+
+--- [START 2018-03-30_14-36-26] ----------------------------------------------------------------
+
+** some experiment setting **
+	SEED         = 35202
+	PROJECT_PATH = /media/lzm/DC9458A6945884C4/projects/frog
+	out_dir      = /media/lzm/DC9458A6945884C4/projects/frog/results/mask-rcnn-50-gray500-02
+
+** net setting **
+<class 'net.resnet50_mask_rcnn.model.MaskRcnnNet'>
+
+net version 'mask-rcnn-resnet50-fpn'
+
+** dataset setting **
+	WIDTH, HEIGHT = 256, 256
+	train_dataset.split = disk0_ids_dummy_9
+	valid_dataset.split = disk0_ids_dummy_9
+	len(train_dataset)  = 9
+	len(valid_dataset)  = 9
+	len(train_loader)   = 0
+	len(valid_loader)   = 1
+	batch_size  = 16
+	iter_accum  = 1
+	batch_size*iter_accum  = 16
+
+** start training here! **
+ optimizer=SGD (
+Parameter Group 0
+    dampening: 0
+    lr: 0.01
+    momentum: 0.9
+    nesterov: False
+    weight_decay: 0.0001
+)
+ momentum=0.900000
+ LR=None
+
+ images_per_epoch = 9
+
+ rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          
+-------------------------------------------------------------------------------------------------------------------------------
+
+--- [START 2018-03-30_14-38-39] ----------------------------------------------------------------
+
+** some experiment setting **
+	SEED         = 35202
+	PROJECT_PATH = /media/lzm/DC9458A6945884C4/projects/frog
+	out_dir      = /media/lzm/DC9458A6945884C4/projects/frog/results/mask-rcnn-50-gray500-02
+
+** net setting **
+<class 'net.resnet50_mask_rcnn.model.MaskRcnnNet'>
+
+net version 'mask-rcnn-resnet50-fpn'
+
+** dataset setting **
+
+--- [START 2018-03-30_14-42-48] ----------------------------------------------------------------
+
+** some experiment setting **
+	SEED         = 35202
+	PROJECT_PATH = /media/lzm/DC9458A6945884C4/projects/frog
+	out_dir      = /media/lzm/DC9458A6945884C4/projects/frog/results/mask-rcnn-50-gray500-02
+
+** net setting **
+<class 'net.resnet50_mask_rcnn.model.MaskRcnnNet'>
+
+net version 'mask-rcnn-resnet50-fpn'
+
+** dataset setting **
+	WIDTH, HEIGHT = 256, 256
+	train_dataset.split = disk0_ids_dummy_9
+	valid_dataset.split = disk0_ids_dummy_9
+	len(train_dataset)  = 9
+	len(valid_dataset)  = 9
+	len(train_loader)   = 4
+	len(valid_loader)   = 5
+	batch_size  = 2
+	iter_accum  = 1
+	batch_size*iter_accum  = 2
+
+** start training here! **
+ optimizer=SGD (
+Parameter Group 0
+    dampening: 0
+    lr: 0.01
+    momentum: 0.9
+    nesterov: False
+    weight_decay: 0.0001
+)
+ momentum=0.900000
+ LR=None
+
+ images_per_epoch = 9
+
+ rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          
+-------------------------------------------------------------------------------------------------------------------------------
+0.0000   0.0 k    0.0  0.0 m | 2.021   0.17 0.47   0.69 0.00   0.69 | 0.000   0.00 0.00   0.00 0.00   0.00 | 0.000   0.00 0.00   0.00 0.00   0.00 |  0 hr 00 min
+0.0100   0.1 k   22.2  0.0 m | 0.259   0.02 0.06   0.06 0.01   0.11 | 0.650   0.05 0.09   0.30 0.04   0.17 | 0.536   0.04 0.11   0.24 0.04   0.11 |  0 hr 01 min
+0.0100   0.2 k   44.4  0.0 m | 0.447   0.02 0.07   0.22 0.01   0.13 | 0.558   0.03 0.09   0.29 0.03   0.12 | 0.583   0.02 0.10   0.31 0.02   0.13 |  0 hr 03 min
+0.0100   0.3 k   66.7  0.0 m | 0.277   0.01 0.03   0.13 0.00   0.10 | 0.571   0.03 0.06   0.34 0.01   0.12 | 0.421   0.01 0.05   0.24 0.02   0.11 |  0 hr 04 min
+0.0100   0.4 k   88.9  0.0 m | 0.286   0.01 0.04   0.15 0.01   0.08 | 0.602   0.02 0.09   0.33 0.02   0.15 | 0.268   0.01 0.04   0.10 0.02   0.09 |  0 hr 06 min
+0.0100   0.5 k  111.1  0.0 m | 0.205   0.01 0.02   0.11 0.01   0.05 | 0.262   0.01 0.03   0.13 0.01   0.08 | 0.381   0.02 0.04   0.23 0.01   0.08 |  0 hr 07 min

@@ -1,0 +1,25 @@
+# data
+*.csv
+*.zip
+*.png
+*.jpg
+
+# log files
+*.txt
+*.pkl
+
+# util&model files
+*.npy
+*.pth
+
+# build files
+*.so
+*.cu.o
+
+# temp files
+*.iml
+*.xml
+*.py[cod]
+
+# Atom
+._*
