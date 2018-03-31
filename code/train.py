@@ -65,7 +65,7 @@ def train_augment(image, multi_mask, meta, index):
 
 def valid_augment(image, multi_mask, meta, index):
 
-    image,  multi_mask = fix_crop_transform2(image, multi_mask, -1,-1,WIDTH, HEIGHT)
+    image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
 
     #---------------------------------------
     input = torch.from_numpy(image.transpose((2,0,1))).float().div(255)
@@ -122,8 +122,7 @@ def evaluate( net, test_loader ):
     return test_loss, test_acc
 
 
-
-#--------------------------------------------------------------
+# --------------------------------------------------------------
 def run_train():
 
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'

@@ -46,10 +46,12 @@ class ScienceDataset(Dataset):
         id = self.ids[index]
         name = id.split('/')[-1]
         folder = id.split('/')[0]
-        image = cv2.imread(DATA_DIR + '/image/%s/images/%s.png'%(folder,name), cv2.IMREAD_COLOR)
+        image = cv2.imread(DATA_DIR + '/image/%s/images/%s.png'%(folder, name), cv2.IMREAD_COLOR)
+        if image is None:
+            raise FileNotFoundError
 
         if self.mode in ['train']:
-            multi_mask = np.load(DATA_DIR + '/image/%s/multi_masks/%s.npy'%(folder,name)).astype(np.int32)
+            multi_mask = np.load(DATA_DIR + '/image/%s/multi_masks/%s.npy' % (folder, name)).astype(np.int32)
             meta = '<not_used>'
 
             if self.transform is not None:
