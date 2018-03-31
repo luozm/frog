@@ -1,22 +1,10 @@
-from common import *
-from net.metric import *
-from dataset.reader import *
+import cv2
+import numpy as np
 
-if __name__ == '__main__':
-    from configuration import *
-    from layer.rpn_multi_nms     import *
-    from layer.rpn_multi_target  import *
-    from layer.rpn_multi_loss    import *
-
-
-else:
-    from .configuration import *
-    from .layer.rpn_multi_nms    import *
-    from .layer.rpn_multi_target import *
-    from .layer.rpn_multi_loss   import *
-
-
-
+from net.layer.rpn_multi_nms import rpn_decode
+from net.layer.rpn_multi_target import unflat_to_c3, draw_shadow_text, to_color
+from net.metric import HIT, MISS, INVALID, TP, FP, compute_precision_for_box, draw_screen_rect, compute_precision
+from dataset.reader import instance_to_multi_mask, multi_mask_to_contour_overlay
 
 
 def draw_multi_rpn_prob(cfg, image, rpn_prob_flat):

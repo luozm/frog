@@ -1,34 +1,22 @@
+import os
+import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 from torch.nn.parallel import data_parallel
+
 from net.lib.roi_align_pool_tf.module import RoIAlign as Crop
-
-
-if __name__ == '__main__':
-    from configuration import *
-    from layer.rpn_multi_nms     import *
-    from layer.rpn_multi_target  import *
-    from layer.rpn_multi_loss    import *
-    from layer.rcnn_nms     import *
-    from layer.rcnn_target  import *
-    from layer.rcnn_loss    import *
-    from layer.mask_nms    import *
-    from layer.mask_target import *
-    from layer.mask_loss   import *
-
-else:
-    from .configuration import *
-    from .layer.rpn_multi_nms     import *
-    from .layer.rpn_multi_target  import *
-    from .layer.rpn_multi_loss    import *
-    from .layer.rcnn_nms     import *
-    from .layer.rcnn_target  import *
-    from .layer.rcnn_loss    import *
-    from .layer.mask_nms    import *
-    from .layer.mask_target import *
-    from .layer.mask_loss   import *
-
-
+from net.resnet50_mask_rcnn.configuration import Configuration
+from net.layer.rpn_multi_nms import make_rpn_windows, rpn_nms
+from net.layer.rpn_multi_target import make_rpn_target
+from net.layer.rpn_multi_loss import rpn_loss
+from net.layer.rcnn_nms import rcnn_nms
+from net.layer.rcnn_target import make_rcnn_target
+from net.layer.rcnn_loss import rcnn_loss
+from net.layer.mask_nms import make_empty_masks, mask_nms
+from net.layer.mask_target import make_mask_target
+from net.layer.mask_loss import mask_loss
 
 
 #############  resent50 pyramid feature net ##############################################################################

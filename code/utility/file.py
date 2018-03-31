@@ -18,19 +18,22 @@ def remove_comments(lines, token='#'):
 
 
 def open(file, mode=None, encoding=None):
-    if mode == None: mode = 'r'
+    if mode is None:
+        mode = 'r'
 
     if '/' in file:
         if 'w' or 'a' in mode:
             dir = os.path.dirname(file)
-            if not os.path.isdir(dir):  os.makedirs(dir)
+            if not os.path.isdir(dir):
+                os.makedirs(dir)
 
     f = builtins.open(file, mode=mode, encoding=encoding)
     return f
 
 
 def remove(file):
-    if os.path.exists(file): os.remove(file)
+    if os.path.exists(file):
+        os.remove(file)
 
 
 def empty(dir):
@@ -68,41 +71,58 @@ class Logger(object):
         # you might want to specify some extra behavior here.
         pass
 
-# io ------------------------------------
-def write_list_to_file(strings, list_file):
+
+def write_list_to_file(path_list, list_file):
     with open(list_file, 'w') as f:
-        for s in strings:
-            f.write('%s\n'%str(s))
+        for path in path_list:
+            f.write('%s\n' % str(path))
     pass
 
 
 def read_list_from_file(list_file, comment='#', func=None):
-    with open(list_file) as f:
-        lines  = f.readlines()
+    """Read list of paths from file
+    Ignore comment lines (line start with '#')
 
-    strings=[]
+    :param list_file: file that records list of paths.
+    :param comment:
+    :param func:
+    :return:
+    """
+    with open(list_file) as f:
+        lines = f.readlines()
+
+    strings = []
     for line in lines:
         s = line.split(comment, 1)[0].strip()
         if s != '':
             strings.append(s)
     if func is not None:
-        strings=[func(s) for s in strings]
+        strings = [func(s) for s in strings]
 
     return strings
 
-# backup ------------------------------------
 
-#https://stackoverflow.com/questions/1855095/how-to-create-a-zip-archive-of-a-directory
+# https://stackoverflow.com/questions/1855095/how-to-create-a-zip-archive-of-a-directory
 def backup_project_as_zip(project_dir, zip_file):
+    """Backup whole project to zip file
+
+    :param project_dir:
+    :param zip_file:
+    :return:
+    """
     assert(os.path.isdir(project_dir))
     assert(os.path.isdir(os.path.dirname(zip_file)))
-    shutil.make_archive(zip_file.replace('.zip',''), 'zip', project_dir)
+    shutil.make_archive(zip_file.replace('.zip', ''), 'zip', project_dir)
     pass
 
 
-# etc ------------------------------------
 def time_to_str(t):
-    t  = int(t)
+    """Convert time to string (hour/min)
+
+    :param t: time in minutes
+    :return: time string
+    """
+    t = int(t)
     hr = t//60
-    min = t%60
-    return '%2d hr %02d min'%(hr,min)
+    minutes = t % 60
+    return '%2d hr %02d min' % (hr, minutes)

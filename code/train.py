@@ -17,11 +17,11 @@ from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 from utility.file import Logger, time_to_str
 from utility.draw import image_show
-from dataset.reader import ScienceDataset
-from net.rate import get_learning_rate, adjust_learning_rate
+from dataset.reader import ScienceDataset, multi_mask_to_annotation, mask_to_inner_contour
+from net.learning_rate import get_learning_rate, adjust_learning_rate
 from net.resnet50_mask_rcnn.configuration import Configuration
-from net.resnet50_mask_rcnn.draw import multi_mask_to_annotation, mask_to_inner_contour, \
-    instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
+from net.resnet50_mask_rcnn.resnet50_mask_rcnn import MaskRcnnNet
+from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
 from dataset.transform import random_shift_scale_rotate_transform2,\
     random_crop_transform2, random_horizontal_flip_transform2,\
     random_vertical_flip_transform2, random_rotate90_transform2, fix_crop_transform2
@@ -33,7 +33,7 @@ from dataset.transform import random_shift_scale_rotate_transform2,\
 WIDTH, HEIGHT = 256, 256
 
 
-from net.resnet50_mask_rcnn.model import MaskRcnnNet
+
 # -------------------------------------------------------------------------------------
 
 
@@ -114,10 +114,10 @@ def evaluate( net, test_loader ):
                            net.rcnn_reg_loss.cpu().data.numpy(),
                            net.mask_cls_loss.cpu().data.numpy(),
                          ))
-        test_num  += batch_size
+        test_num += batch_size
 
     assert(test_num == len(test_loader.sampler))
-    test_acc  = test_acc/test_num
+    test_acc = test_acc/test_num
     test_loss = test_loss/test_num
     return test_loss, test_acc
 
