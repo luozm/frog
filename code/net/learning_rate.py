@@ -1,5 +1,11 @@
-# learning rate schduler
-from common import *
+"""
+learning rate schduler
+"""
+import os
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 # http://elgoacademy.org/anatomy-matplotlib-part-1/
 def plot_rates(fig, lrs, num_epoches, title=''):
@@ -33,7 +39,6 @@ def plot_rates(fig, lrs, num_epoches, title=''):
     ax.set_ylabel('learning rate')
     ax.set_title(title)
     ax.plot(epoches, lrs)
-
 
 
 ## simple stepping rates
@@ -78,8 +83,6 @@ class DecayLR():
     def get_rate(self, epoch):
         lr = self.base_lr * (self.decay**(epoch // self.step))
         return lr
-
-
 
     def __str__(self):
         string = '(Exp) Decay Learning Rates\n' \

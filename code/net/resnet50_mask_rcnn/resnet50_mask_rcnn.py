@@ -169,7 +169,6 @@ class RpnMultiHead(nn.Module):
             )
 
 
-
     def forward(self, fs):
         batch_size = len(fs[0])
 

@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import RandomSampler
 
-from common import DATA_DIR
+from common import IMAGE_DIR, SPLIT_DIR
 from utility.file import read_list_from_file
 from utility.draw import image_show
 from net.lib.box.process import is_big_box, is_small_box, is_small_box_at_boundary
@@ -24,16 +24,21 @@ IGNORE_BIG = -3
 
 class ScienceDataset(Dataset):
 
-    def __init__(self, split, transform=None, mode='train'):
+    def __init__(self, split_file, img_folder, mask_folder=None, transform=None, mode='train'):
         super(ScienceDataset, self).__init__()
         start = timer()
 
-        self.split = split
+        self.split = split_file
+        self.folder = img_folder
+        if mask_folder is None:
+            self.mask_folder = img_folder
+        else:
+            self.mask_folder = mask_folder
         self.transform = transform
         self.mode = mode
 
         # read split
-        ids = read_list_from_file(DATA_DIR + '/split/' + split, comment='#')
+        ids = read_list_from_file(SPLIT_DIR + split_file, comment='#')
 
         # save
         self.ids = ids
@@ -43,15 +48,14 @@ class ScienceDataset(Dataset):
         print('')
 
     def __getitem__(self, index):
-        id = self.ids[index]
-        name = id.split('/')[-1]
-        folder = id.split('/')[0]
-        image = cv2.imread(DATA_DIR + '/image/%s/images/%s.png'%(folder, name), cv2.IMREAD_COLOR)
+        name = self.ids[index]
+
+        image = cv2.imread(IMAGE_DIR + '%s/images/%s.png' % (self.folder, name), cv2.IMREAD_COLOR)
         if image is None:
             raise FileNotFoundError
 
         if self.mode in ['train']:
-            multi_mask = np.load(DATA_DIR + '/image/%s/multi_masks/%s.npy' % (folder, name)).astype(np.int32)
+            multi_mask = np.load(IMAGE_DIR + '/%s/multi_masks/%s.npy' % (self.mask_folder, name)).astype(np.int32)
             meta = '<not_used>'
 
             if self.transform is not None:

@@ -18,7 +18,7 @@ from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from utility.file import Logger, time_to_str
 from utility.draw import image_show
 from dataset.reader import ScienceDataset, multi_mask_to_annotation, mask_to_inner_contour
-from net.learning_rate import get_learning_rate, adjust_learning_rate
+from net.learning_rate import get_learning_rate, adjust_learning_rate, StepLR
 from net.resnet50_mask_rcnn.configuration import Configuration
 from net.resnet50_mask_rcnn.resnet50_mask_rcnn import MaskRcnnNet
 from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
@@ -123,7 +123,7 @@ def evaluate( net, test_loader ):
 
 
 # --------------------------------------------------------------
-def run_train():
+def run_train(train_split, val_split):
 
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = \
@@ -132,7 +132,7 @@ def run_train():
 
     pretrain_file = \
         None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
-    skip = ['crop','mask']
+    skip = ['crop', 'mask']
 
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
@@ -174,15 +174,14 @@ def run_train():
     iter_accum = 1
     batch_size = 3#16
 
-    num_iters = 1000 #* 1000
+    num_iters = 5000 #* 1000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 100
     iter_save = [0, num_iters-1]\
-                   + list(range(0,num_iters,500))#1*1000
+                   + list(range(0, num_iters, 500))#1*1000
 
-
-    LR = None  #LR = StepLR([ (0, 0.01),  (200, 0.001),  (300, -1)])
+    LR = StepLR([(0, 0.01),  (3000, 0.001),  (4000, 0.0001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
@@ -202,12 +201,15 @@ def run_train():
     log.write('** dataset setting **\n')
 
     train_dataset = ScienceDataset(
-                            'train1_ids_gray2_500', mode='train',
-                            #'debug1_ids_gray_only_10', mode='train',
-#                            'disk0_ids_dummy_9', mode='train', #12
-                            #'train1_ids_purple_only1_101', mode='train', #12
-                            #'merge1_1', mode='train',
-                            transform=train_augment)
+        train_split,
+        img_folder='train1_norm',
+        mask_folder='stage1_train',
+        mode='train',
+        #'debug1_ids_gray_only_10', mode='train',
+        #'disk0_ids_dummy_9', mode='train', #12
+        #'train1_ids_purple_only1_101', mode='train', #12
+        #'merge1_1', mode='train',
+        transform=train_augment)
 
     train_loader = DataLoader(
                         train_dataset,
@@ -219,12 +221,15 @@ def run_train():
                         collate_fn=train_collate)
 
     valid_dataset = ScienceDataset(
-                            'valid1_ids_gray2_43', mode='train',
-                            #'debug1_ids_gray_only_10', mode='train',
-#                            'disk0_ids_dummy_9', mode='train',
-                            #'train1_ids_purple_only1_101', mode='train', #12
-                            #'merge1_1', mode='train',
-                            transform=valid_augment)
+        val_split,
+        img_folder='train1_norm',
+        mask_folder='stage1_train',
+        mode='train',
+        #'debug1_ids_gray_only_10', mode='train',
+        #'disk0_ids_dummy_9', mode='train',
+        #'train1_ids_purple_only1_101', mode='train', #12
+        #'merge1_1', mode='train',
+        transform=valid_augment)
 
     valid_loader = DataLoader(
                         valid_dataset,
@@ -348,7 +353,8 @@ def run_train():
             # learning rate schduler -------------
             if LR is not None:
                 lr = LR.get_rate(i)
-                if lr<0 : break
+                if lr < 0:
+                    break
                 adjust_learning_rate(optimizer, lr/iter_accum)
             rate = get_learning_rate(optimizer)*iter_accum
 
@@ -420,7 +426,8 @@ def run_train():
 
 
                 #print('train',batch_size)
-                for b in range(batch_size): 
+                for b in range(1):
+#                for b in range(batch_size):
 
                     image = (images[b].transpose((1,2,0))*255)
                     image = image.astype(np.uint8)
@@ -493,8 +500,9 @@ def run_train():
                     #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
                     #cv2.imwrite(out_dir +'/train/%05d.png'%b,summary)
 
-                    cv2.imwrite(out_dir +'/train/%05d.rpn_precision.png'%b,  all5)
-                    cv2.imwrite(out_dir +'/train/%05d.rcnn_precision..png'%b,all6)
+                    cv2.imwrite(out_dir + '/train/%05d.rpn_precision.png' % b,  all5)
+                    cv2.imwrite(out_dir + '/train/%05d.rcnn_precision..png' % b, all6)
+                    cv2.imwrite(out_dir + '/train/%05d.mask_precision.png' % b,  all7)
                     cv2.waitKey(1)
                     pass
 
@@ -521,7 +529,7 @@ def run_train():
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train()
+    run_train(train_split='train1_train_603', val_split='train1_val_67')
 
     print('\nsucess!')
 

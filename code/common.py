@@ -5,54 +5,17 @@ import torch
 from datetime import datetime
 
 # edit settings here
-ROOT_DIR = '/media/lzm/DC9458A6945884C4/projects/frog'
-DATA_DIR = ROOT_DIR + '/data'
-RESULTS_DIR = ROOT_DIR + '/results'
+ROOT_DIR = '/media/lzm/DC9458A6945884C4/projects/frog/'
+DATA_DIR = ROOT_DIR + 'data/'
+DOWNLOAD_DIR = DATA_DIR + '__download__/'
+IMAGE_DIR = DATA_DIR + 'image/'
+SPLIT_DIR = DATA_DIR + 'split/'
+RESULTS_DIR = ROOT_DIR + 'results/'
+
 
 # project info
 PROJECT_PATH = os.path.dirname(os.path.realpath(__file__))
 IDENTIFIER = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-
-# import math
-# import PIL
-# import cv2
-#
-# # torch libs
-# import torch
-# import torchvision.transforms as transforms
-# from torch.utils.data.dataset import Dataset
-# from torch.utils.data import DataLoader
-# from torch.utils.data.sampler import *
-#
-# import torch.nn as nn
-# import torch.nn.functional as F
-# from torch.autograd import Variable
-# import torch.optim as optim
-# from torch.nn.parallel.data_parallel import data_parallel
-#
-#
-# # std libs
-# import collections
-# import copy
-# import numbers
-# import inspect
-# import shutil
-# from timeit import default_timer as timer
-#
-# import csv
-# import pandas as pd
-# import pickle
-# import glob
-# import sys
-# from distutils.dir_util import copy_tree
-# import time
-# import matplotlib.pyplot as plt
-#
-# import skimage
-# import skimage.color
-# import skimage.morphology
-# from scipy import ndimage
 
 
 # ---------------------------------------------------------------------------------
