@@ -1,3 +1,6 @@
+"""
+Transformations for both images and masks.
+"""
 import os
 import cv2
 import math
@@ -8,12 +11,15 @@ from PIL import Image
 import numpy as np
 
 
-## for debug
+# for debug
 def dummy_transform(image):
     print ('\tdummy_transform')
     return image
 
-# kaggle science bowl-2 : ################################################################
+
+# ------------------------------------------------------------------------------------
+# transform both for images & masks
+# ------------------------------------------------------------------------------------
 
 def resize_to_factor2(image, mask, factor=16):
 
@@ -21,7 +27,6 @@ def resize_to_factor2(image, mask, factor=16):
     h = (H//factor)*factor
     w = (W //factor)*factor
     return fix_resize_transform2(image, mask, w, h)
-
 
 
 def fix_resize_transform2(image, mask, w, h):
@@ -33,8 +38,6 @@ def fix_resize_transform2(image, mask, w, h):
         mask = cv2.resize(mask,(w,h),cv2.INTER_NEAREST)
         mask = mask.astype(np.int32)
     return image, mask
-
-
 
 
 def fix_crop_transform2(image, mask, x,y,w,h):
@@ -72,18 +75,19 @@ def random_crop_transform2(image, mask, w,h, u=0.5):
     return fix_crop_transform2(image, mask, x,y,w,h)
 
 
-
 def random_horizontal_flip_transform2(image, mask, u=0.5):
     if random.random() < u:
         image = cv2.flip(image,1)  #np.fliplr(img) ##left-right
         mask  = cv2.flip(mask,1)
     return image, mask
 
+
 def random_vertical_flip_transform2(image, mask, u=0.5):
     if random.random() < u:
         image = cv2.flip(image,0)
         mask  = cv2.flip(mask,0)
     return image, mask
+
 
 def random_rotate90_transform2(image, mask, u=0.5):
     if random.random() < u:
@@ -113,8 +117,7 @@ def relabel_multi_mask(multi_mask):
     unique_color = set( tuple(v) for m in data for v in m )
     #print(len(unique_color))
 
-
-    H,W  = data.shape[:2]
+    H, W = data.shape[:2]
     multi_mask = np.zeros((H,W),np.int32)
     for color in unique_color:
         #print(color)
@@ -133,17 +136,15 @@ def random_shift_scale_rotate_transform2( image, mask,
                         shift_limit=[-0.0625,0.0625], scale_limit=[1/1.2,1.2],
                         rotate_limit=[-15,15], borderMode=cv2.BORDER_REFLECT_101 , u=0.5):
 
-    #cv2.BORDER_REFLECT_101  cv2.BORDER_CONSTANT
-
     if random.random() < u:
         height, width, channel = image.shape
 
-        angle  = random.uniform(rotate_limit[0],rotate_limit[1])  #degree
-        scale  = random.uniform(scale_limit[0],scale_limit[1])
-        sx    = scale
-        sy    = scale
-        dx    = round(random.uniform(shift_limit[0],shift_limit[1])*width )
-        dy    = round(random.uniform(shift_limit[0],shift_limit[1])*height)
+        angle = random.uniform(rotate_limit[0], rotate_limit[1])  #degree
+        scale = random.uniform(scale_limit[0], scale_limit[1])
+        sx = scale
+        sy = scale
+        dx = round(random.uniform(shift_limit[0], shift_limit[1])*width)
+        dy = round(random.uniform(shift_limit[0], shift_limit[1])*height)
 
         cc = math.cos(angle/180*math.pi)*(sx)
         ss = math.sin(angle/180*math.pi)*(sy)
@@ -155,25 +156,28 @@ def random_shift_scale_rotate_transform2( image, mask,
 
         box0 = box0.astype(np.float32)
         box1 = box1.astype(np.float32)
-        mat = cv2.getPerspectiveTransform(box0,box1)
+        mat = cv2.getPerspectiveTransform(box0, box1)
 
         image = cv2.warpPerspective(image, mat, (width,height),flags=cv2.INTER_LINEAR,
                                     borderMode=borderMode,borderValue=(0,0,0,))  #cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
 
         mask = mask.astype(np.float32)
-        mask = cv2.warpPerspective(mask, mat, (width,height),flags=cv2.INTER_NEAREST,#cv2.INTER_LINEAR
-                                    borderMode=borderMode,borderValue=(0,0,0,))  #cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+        mask = cv2.warpPerspective(mask, mat, (width, height), flags=cv2.INTER_NEAREST,#cv2.INTER_LINEAR
+                                   borderMode=borderMode, borderValue=(0,0,0,))  #cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
         mask = mask.astype(np.int32)
         mask = relabel_multi_mask(mask)
 
     return image, mask
 
 
+# ------------------------------------------------------------------------------------
+# transform for images
+# ------------------------------------------------------------------------------------
 
+# --------------------------------
+# photometric transform
+# --------------------------------
 
-# single image ########################################################
-
-#agumentation (photometric) ----------------------
 def random_brightness_shift_transform(image, limit=[16,64], u=0.5):
     if np.random.random() < u:
         alpha = np.random.uniform(limit[0], limit[1])
@@ -238,9 +242,12 @@ def random_noise_transform(image, limit=[0, 0.5], u=0.5):
     return image
 
 
-# geometric ---
+# --------------------------------
+# geometric transform
+# --------------------------------
+
 def resize_to_factor(image, factor=16):
-    height,width = image.shape[:2]
+    height, width = image.shape[:2]
     h = (height//factor)*factor
     w = (width //factor)*factor
     return fix_resize_transform(image, w, h)
@@ -254,7 +261,7 @@ def fix_resize_transform(image, w, h):
 
 
 def pad_to_factor(image, factor=16):
-    height,width = image.shape[:2]
+    height, width = image.shape[:2]
     h = math.ceil(height/factor)*factor
     w = math.ceil(width/factor)*factor
 
@@ -459,10 +466,8 @@ class GaussianDistortion:
         return augmented_images
 
 
-
-# main #################################################################
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
+    print('%s: calling main function ... ' % os.path.basename(__file__))
     from dataset.reader import ScienceDataset
     import matplotlib.pyplot as plt
     from skimage import exposure
@@ -487,8 +492,6 @@ if __name__ == '__main__':
 
         # Adaptive Equalization
         img_adapteq = exposure.equalize_adapthist(img, clip_limit=0.03)
-
-
 
         # result = elastic_transform_2(img[:,:,0],img.shape[1]*2, img.shape[1]*0.08)
         plt.imshow(img)

@@ -364,7 +364,7 @@ class MaskNet(nn.Module):
     def __init__(self, cfg):
         super(MaskNet, self).__init__()
         self.version = 'net version \'mask-rcnn-se-resnext50-fpn\''
-        self.cfg  = cfg
+        self.cfg = cfg
         self.mode = 'train'
 
         feature_channels = 256
@@ -377,7 +377,7 @@ class MaskNet(nn.Module):
         self.mask_head = MaskHead(cfg, crop_channels)
 
     def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None ):
-        cfg  = self.cfg
+        cfg = self.cfg
         mode = self.mode
         batch_size = len(inputs)
 
@@ -412,7 +412,7 @@ class MaskNet(nn.Module):
 
         #segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
-        self.masks      = make_empty_masks(cfg, mode, inputs)
+        self.masks = make_empty_masks(cfg, mode, inputs)
 
         if len(self.rcnn_proposals) > 0:
             mask_crops = self.mask_crop(features, self.detections)
@@ -433,13 +433,12 @@ class MaskNet(nn.Module):
              mask_loss( self.mask_logits, self.mask_labels, self.mask_instances )
 
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
-                          + self.rcnn_cls_loss +  self.rcnn_reg_loss \
+                          + self.rcnn_cls_loss + self.rcnn_reg_loss \
                           + self.mask_cls_loss
 
         return self.total_loss
 
-
-    #<todo> freeze bn for imagenet pretrain
+    # <todo> freeze bn for imagenet pretrain
     def set_mode(self, mode ):
         self.mode = mode
         if mode in ['eval', 'valid', 'test']:
@@ -488,7 +487,7 @@ def run_check_feature_net():
 
 def run_check_multi_rpn_head():
 
-    batch_size  = 8
+    batch_size = 8
     in_channels = 128
     H,W = 256, 256
     num_scales = 4

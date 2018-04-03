@@ -15,8 +15,8 @@ from utility.file import backup_project_as_zip, Logger
 from utility.draw import image_show
 from net.draw import draw_multi_proposal_metric, draw_mask_metric
 from net.metric import compute_precision_for_box, compute_average_precision_for_mask
-from net.resnet50_mask_rcnn.configuration import Configuration
-from net.resnet50_mask_rcnn.resnet50_mask_rcnn import MaskRcnnNet
+from net.se_resnext50_mask_rcnn.configuration import Configuration
+from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
 
 
 
@@ -65,12 +65,11 @@ def revert(net, images):
     return net, image
 
 
-
 def eval_augment(image, multi_mask, meta, index):
 
     pad_image = pad_to_factor(image, factor=16)
     input = torch.from_numpy(pad_image.transpose((2,0,1))).float().div(255)
-    box, label, instance  = multi_mask_to_annotation(multi_mask)
+    box, label, instance = multi_mask_to_annotation(multi_mask)
 
     return input, box, label, instance, meta, image, index
 
@@ -90,24 +89,20 @@ def eval_collate(batch):
     return [inputs, boxes, labels, instances, metas, images, indices]
 
 
+# --------------------------------------------------------------
+def run_evaluate(val_split):
 
-
-
-
-#--------------------------------------------------------------
-def run_evaluate():
-
-    out_dir  = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+    out_dir = RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01'
     initial_checkpoint = \
-        RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00016500_model.pth'
+        RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01/checkpoint/20248_model.pth'
         ##
 
     ## setup  ---------------------------
-    os.makedirs(out_dir +'/evaluate/overlays', exist_ok=True)
-    os.makedirs(out_dir +'/evaluate/npys', exist_ok=True)
-    os.makedirs(out_dir +'/checkpoint', exist_ok=True)
-    os.makedirs(out_dir +'/backup', exist_ok=True)
-    backup_project_as_zip(PROJECT_PATH, out_dir +'/backup/code.%s.zip'%IDENTIFIER)
+    os.makedirs(out_dir + '/evaluate/overlays', exist_ok=True)
+    os.makedirs(out_dir + '/evaluate/npys', exist_ok=True)
+    os.makedirs(out_dir + '/checkpoint', exist_ok=True)
+    os.makedirs(out_dir + '/backup', exist_ok=True)
+    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.%s.zip'%IDENTIFIER)
 
     log = Logger()
     log.open(out_dir+'/log.evaluate.txt',mode='a')
@@ -118,73 +113,67 @@ def run_evaluate():
     log.write('\tout_dir      = %s\n' % out_dir)
     log.write('\n')
 
-
     ## net ------------------------------
     cfg = Configuration()
     # cfg.rpn_train_nms_pre_score_threshold = 0.8 #0.885#0.5
     # cfg.rpn_test_nms_pre_score_threshold  = 0.8 #0.885#0.5
 
-    net = MaskRcnnNet(cfg).cuda()
+    net = MaskNet(cfg).cuda()
     if initial_checkpoint is not None:
         log.write('\tinitial_checkpoint = %s\n' % initial_checkpoint)
         net.load_state_dict(torch.load(initial_checkpoint, map_location=lambda storage, loc: storage))
 
-
     log.write('%s\n\n'%(type(net)))
     log.write('\n')
-
 
 
     ## dataset ----------------------------------------
     log.write('** dataset setting **\n')
 
     test_dataset = ScienceDataset(
-                                #'train1_ids_gray2_500', mode='train',
-                                'valid1_ids_gray2_43', mode='train',
-                                #'debug1_ids_gray2_10', mode='train',
-                                transform = eval_augment)
-    test_loader  = DataLoader(
-                        test_dataset,
-                        sampler = SequentialSampler(test_dataset),
-                        batch_size  = 1,
-                        drop_last   = False,
-                        num_workers = 4,
-                        pin_memory  = True,
-                        collate_fn  = eval_collate)
+        val_split,
+        img_folder='train1_norm',
+        mask_folder='stage1_train',
+        mode='train',
+        transform=eval_augment)
 
+    test_loader = DataLoader(
+        test_dataset,
+        sampler=SequentialSampler(test_dataset),
+        batch_size=1,
+        drop_last=False,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=eval_collate)
 
     log.write('\ttest_dataset.split = %s\n'%(test_dataset.split))
     log.write('\tlen(test_dataset)  = %d\n'%(len(test_dataset)))
     log.write('\n')
 
 
-
-
-
     ## start evaluation here! ##############################################
     log.write('** start evaluation here! **\n')
     mask_average_precisions = []
-    box_precisions_50  = []
+    box_precisions_50 = []
 
-    test_num  = 0
+    test_num = 0
     test_loss = np.zeros(5,np.float32)
-    test_acc  = 0
+    test_acc = 0
     for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, images, indices) in enumerate(test_loader, 0):
-        if all((truth_label>0).sum()==0 for truth_label in truth_labels): continue
+        if all((truth_label > 0).sum() == 0 for truth_label in truth_labels):
+            continue
 
         net.set_mode('test')
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes,  truth_labels, truth_instances )
-            #loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances)
-
+            net(inputs, truth_boxes,  truth_labels, truth_instances)
+#            loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances)
 
         ##save results ---------------------------------------
         revert(net, images)
 
-
         batch_size = len(indices)
-        assert(batch_size==1)  #note current version support batch_size==1 for variable size input
+        assert(batch_size == 1)  #note current version support batch_size==1 for variable size input
                                #to use batch_size>1, need to fix code for net.windows, etc
 
         batch_size,C,H,W = inputs.size()
@@ -194,26 +183,23 @@ def run_evaluate():
         # rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
         # rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
         # proposals  = net.rpn_proposals
-        masks      = net.masks
+        masks = net.masks
         detections = net.detections.cpu().numpy()
-
 
         for b in range(batch_size):
             #image0 = (inputs[b].transpose((1,2,0))*255).astype(np.uint8)
-            image  = images[b]
-            height,width  = image.shape[:2]
+            image = images[b]
+            height,width = image.shape[:2]
             mask = masks[b]
 
-            index = np.where(detections[:,0]==b)[0]
+            index = np.where(detections[:, 0] == b)[0]
             detection = detections[index]
-            box = detection[:,1:5]
-
+            box = detection[:, 1:5]
 
             truth_mask = instance_to_multi_mask(truth_instances[b])
-            truth_box  = truth_boxes[b]
-            truth_label= truth_labels[b]
-            truth_instance= truth_instances[b]
-
+            truth_box = truth_boxes[b]
+            truth_label = truth_labels[b]
+            truth_instance = truth_instances[b]
 
             mask_average_precision, mask_precision =\
                 compute_average_precision_for_mask(mask, truth_mask, t_range=np.arange(0.5, 1.0, 0.05))
@@ -225,45 +211,44 @@ def run_evaluate():
             mask_average_precisions.append(mask_average_precision)
             box_precisions_50.append(box_precision)
 
-
-
-
             # --------------------------------------------
             id = test_dataset.ids[indices[b]]
             name =id.split('/')[-1]
             print('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
+            log.write('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
 
             #----
-            contour_overlay  = multi_mask_to_contour_overlay(mask, image, color=[0,255,0])
-            color_overlay    = multi_mask_to_color_overlay(mask, color='summer')
-            color1_overlay   = multi_mask_to_contour_overlay(mask, color_overlay, color=[255,255,255])
-            all1 = np.hstack((image,contour_overlay,color1_overlay))
+            contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0,255,0])
+            color_overlay = multi_mask_to_color_overlay(mask, color='summer')
+            color1_overlay = multi_mask_to_contour_overlay(mask, color_overlay, color=[255,255,255])
+            all1 = np.hstack((image, contour_overlay, color1_overlay))
 
             all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
             all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
 
-
-
             #image_show('overlay_mask',overlay_mask)
             #image_show('overlay_truth',overlay_truth)
             #image_show('overlay_error',overlay_error)
-            image_show('all1',all1)
-            image_show('all6',all6)
-            image_show('all7',all7)
-            cv2.waitKey(0)
+#            image_show('all1', all1)
+#            image_show('all6', all6)
+#            image_show('all7', all7)
+
+            cv2.imwrite(out_dir + '/evaluate/%s.rcnn_precision.png' % name, all6)
+            cv2.imwrite(out_dir + '/evaluate/%s.mask_precision.png' % name, all7)
+            cv2.waitKey(1)
 
         # print statistics  ------------
-        test_acc  += 0 #batch_size*acc[0][0]
+        test_acc += 0 #batch_size*acc[0][0]
         # test_loss += batch_size*np.array((
         #                    loss.cpu().data.numpy(),
         #                    net.rpn_cls_loss.cpu().data.numpy(),
         #                    net.rpn_reg_loss.cpu().data.numpy(),
-        #                     0,0,
+        #                    0, 0,
         #                  ))
-        test_num  += batch_size
+        test_num += batch_size
 
     #assert(test_num == len(test_loader.sampler))
-    test_acc  = test_acc/test_num
+    test_acc = test_acc/test_num
     test_loss = test_loss/test_num
 
     log.write('initial_checkpoint  = %s\n'%(initial_checkpoint))
@@ -275,14 +260,12 @@ def run_evaluate():
     mask_average_precisions = np.array(mask_average_precisions)
     box_precisions_50 = np.array(box_precisions_50)
     log.write('-------------\n')
-    log.write('mask_average_precision = %0.5f\n'%mask_average_precisions.mean())
-    log.write('box_precision@0.5 = %0.5f\n'%box_precisions_50.mean())
+    log.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
+    log.write('box_precision@0.5 = %0.5f\n' % box_precisions_50.mean())
     log.write('\n')
 
 
-
-
-## evaluate post process here ####-------------------------------------
+# ## evaluate post process here ####-------------------------------------
 # def run_evaluate_map():
 #
 #     out_dir = RESULTS_DIR + '/mask-rcnn-gray-011b-drop1'
@@ -352,22 +335,11 @@ def run_evaluate():
 #     log.write('-------------\n')
 #     log.write('average_precision = %0.5f\n'%average_precisions.mean())
 #     log.write('\n')
-#
 
 
-
-
-
-
-
-
-# main #################################################################
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
-
-
-    run_evaluate()
-
-
+    print('%s: calling main function ... ' % os.path.basename(__file__))
+    torch.backends.cudnn.benchmark = True
+    run_evaluate('train1_val_67')
 
     print('\nsucess!')

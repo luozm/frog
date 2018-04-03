@@ -35,6 +35,7 @@ from dataset.transform import random_shift_scale_rotate_transform2,\
 # common settings
 # -------------------------------------------------------------------------------------
 
+# size after resize
 WIDTH, HEIGHT = 256, 256
 
 
@@ -200,15 +201,15 @@ def run_train(train_split, val_split, resume_checkpoint=None, pretrain_file=None
     iter_accum = 1
     batch_size = 4
 
-    num_iters = 20000
+    num_iters = 40000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 150
     iter_save = [0, num_iters-1]\
-                   + list(range(0, num_iters, 500))#1*1000
+                + list(range(0, num_iters, 500))#1*1000
 
     # update LR by step
-    LR = StepLR([(0, 0.01),  (10000, 0.001),  (20000, 0.0001)])
+    LR = StepLR([(20000, 0.001),  (30000, 0.0001),  (40000, 0.00001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
@@ -399,107 +400,107 @@ def run_train(train_split, val_split, resume_checkpoint=None, pretrain_file=None
             # print training images
             # ---------------------------------------------------------------------------
 
-            if show_train_img:
-
-                net.set_mode('test')
-                with torch.no_grad():
-                    net(inputs, truth_boxes, truth_labels, truth_instances)
-
-                batch_size, C, H, W = inputs.size()
-                images = inputs.data.cpu().numpy()
-                window = net.rpn_window
-                rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
-                rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
-                rpn_proposals = net.rpn_proposals.data.cpu().numpy()
-
-                rcnn_logits = net.rcnn_logits.data.cpu().numpy()
-                rcnn_deltas = net.rcnn_deltas.data.cpu().numpy()
-                rcnn_proposals = net.rcnn_proposals.data.cpu().numpy()
-
-                detections = net.detections.data.cpu().numpy()
-                masks = net.masks
-
-                #print('train',batch_size)
-                for b in range(1):
-#                for b in range(batch_size):
-
-                    image = (images[b].transpose((1, 2, 0))*255)
-                    image = image.astype(np.uint8)
-                    #image = np.clip(image.astype(np.float32)*2,0,255).astype(np.uint8)  #improve contrast
-
-                    truth_box = truth_boxes[b]
-                    truth_label = truth_labels[b]
-                    truth_instance = truth_instances[b]
-                    truth_mask = instance_to_multi_mask(truth_instance)
-
-                    rpn_logit_flat = rpn_logits_flat[b]
-                    rpn_delta_flat = rpn_deltas_flat[b]
-                    rpn_prob_flat = np_softmax(rpn_logit_flat)
-
-                    rpn_proposal = np.zeros((0, 7), np.float32)
-                    if len(rpn_proposals) > 0:
-                        index = np.where(rpn_proposals[:, 0] == b)[0]
-                        rpn_proposal = rpn_proposals[index]
-
-                    rcnn_proposal = np.zeros((0, 7), np.float32)
-                    if len(rcnn_proposals) > 0:
-                        index = np.where(rcnn_proposals[:, 0] == b)[0]
-                        rcnn_logit = rcnn_logits[index]
-                        rcnn_delta = rcnn_deltas[index]
-                        rcnn_prob = np_softmax(rcnn_logit)
-                        rcnn_proposal = rcnn_proposals[index]
-
-                    mask = masks[b]
-
-
-                    #box = proposal[:,1:5]
-                    #mask = masks[b]
-
-                    ## draw --------------------------------------------------------------------------
-                    #contour_overlay = multi_mask_to_contour_overlay(truth_mask, image, [255,255,0] )
-                    #color_overlay   = multi_mask_to_color_overlay(mask)
-
-                    #all1 = draw_multi_rpn_prob(cfg, image, rpn_prob_flat)
-                    #all2 = draw_multi_rpn_delta(cfg, overlay_contour, rpn_prob_flat, rpn_delta_flat, window,[0,0,255])
-                    #all3 = draw_multi_rpn_proposal(cfg, image, proposal)
-                    #all4 = draw_truth_box(cfg, image, truth_box, truth_label)
-
-                    all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
-                    all6 = draw_multi_proposal_metric(cfg, image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
-                    all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
-
-                    # image_show('color_overlay',color_overlay,1)
-                    # image_show('rpn_prob',all1,1)
-                    # image_show('rpn_prob',all1,1)
-                    # image_show('rpn_delta',all2,1)
-                    # image_show('rpn_proposal',all3,1)
-                    # image_show('truth_box',all4,1)
-                    # image_show('rpn_precision',all5,1)
-                    image_show('rpn_precision', all5, 1)
-                    image_show('rcnn_precision', all6, 1)
-                    image_show('mask_precision', all7, 1)
-
-
-                    # summary = np.vstack([
-                    #     all5,
-                    #     np.hstack([
-                    #         all1,
-                    #         np.vstack( [all2, np.zeros((H,2*W,3),np.uint8)])
-                    #     ])
-                    # ])
-                    # draw_shadow_text(summary, 'iter=%08d'%i,  (5,3*HEIGHT-15),0.5, (255,255,255), 1)
-                    # image_show('summary',summary,1)
-
-                    name = train_dataset.ids[indices[b]].split('/')[-1]
-                    #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
-                    #cv2.imwrite(out_dir +'/train/%05d.png'%b,summary)
-
-                    # cv2.imwrite(out_dir + '/train/%05d.rpn_precision.png' % b,  all5)
-                    # cv2.imwrite(out_dir + '/train/%05d.rcnn_precision..png' % b, all6)
-                    # cv2.imwrite(out_dir + '/train/%05d.mask_precision.png' % b,  all7)
-                    cv2.waitKey(1)
-
-                net.set_mode('train')
+#             if show_train_img:
+#
+#                 net.set_mode('test')
+#                 with torch.no_grad():
+#                     net(inputs, truth_boxes, truth_labels, truth_instances)
+#
+#                 batch_size, C, H, W = inputs.size()
+#                 images = inputs.data.cpu().numpy()
+#                 window = net.rpn_window
+#                 rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
+#                 rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
+#                 rpn_proposals = net.rpn_proposals.data.cpu().numpy()
+#
+#                 rcnn_logits = net.rcnn_logits.data.cpu().numpy()
+#                 rcnn_deltas = net.rcnn_deltas.data.cpu().numpy()
+#                 rcnn_proposals = net.rcnn_proposals.data.cpu().numpy()
+#
+#                 detections = net.detections.data.cpu().numpy()
+#                 masks = net.masks
+#
+#                 #print('train',batch_size)
+#                 for b in range(1):
+# #                for b in range(batch_size):
+#
+#                     image = (images[b].transpose((1, 2, 0))*255)
+#                     image = image.astype(np.uint8)
+#                     #image = np.clip(image.astype(np.float32)*2,0,255).astype(np.uint8)  #improve contrast
+#
+#                     truth_box = truth_boxes[b]
+#                     truth_label = truth_labels[b]
+#                     truth_instance = truth_instances[b]
+#                     truth_mask = instance_to_multi_mask(truth_instance)
+#
+#                     rpn_logit_flat = rpn_logits_flat[b]
+#                     rpn_delta_flat = rpn_deltas_flat[b]
+#                     rpn_prob_flat = np_softmax(rpn_logit_flat)
+#
+#                     rpn_proposal = np.zeros((0, 7), np.float32)
+#                     if len(rpn_proposals) > 0:
+#                         index = np.where(rpn_proposals[:, 0] == b)[0]
+#                         rpn_proposal = rpn_proposals[index]
+#
+#                     rcnn_proposal = np.zeros((0, 7), np.float32)
+#                     if len(rcnn_proposals) > 0:
+#                         index = np.where(rcnn_proposals[:, 0] == b)[0]
+#                         rcnn_logit = rcnn_logits[index]
+#                         rcnn_delta = rcnn_deltas[index]
+#                         rcnn_prob = np_softmax(rcnn_logit)
+#                         rcnn_proposal = rcnn_proposals[index]
+#
+#                     mask = masks[b]
+#
+#
+#                     #box = proposal[:,1:5]
+#                     #mask = masks[b]
+#
+#                     ## draw --------------------------------------------------------------------------
+#                     #contour_overlay = multi_mask_to_contour_overlay(truth_mask, image, [255,255,0] )
+#                     #color_overlay   = multi_mask_to_color_overlay(mask)
+#
+#                     #all1 = draw_multi_rpn_prob(cfg, image, rpn_prob_flat)
+#                     #all2 = draw_multi_rpn_delta(cfg, overlay_contour, rpn_prob_flat, rpn_delta_flat, window,[0,0,255])
+#                     #all3 = draw_multi_rpn_proposal(cfg, image, proposal)
+#                     #all4 = draw_truth_box(cfg, image, truth_box, truth_label)
+#
+#                     all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
+#                     all6 = draw_multi_proposal_metric(cfg, image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
+#                     all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
+#
+#                     # image_show('color_overlay',color_overlay,1)
+#                     # image_show('rpn_prob',all1,1)
+#                     # image_show('rpn_prob',all1,1)
+#                     # image_show('rpn_delta',all2,1)
+#                     # image_show('rpn_proposal',all3,1)
+#                     # image_show('truth_box',all4,1)
+#                     # image_show('rpn_precision',all5,1)
+#                     image_show('rpn_precision', all5, 1)
+#                     image_show('rcnn_precision', all6, 1)
+#                     image_show('mask_precision', all7, 1)
+#
+#
+#                     # summary = np.vstack([
+#                     #     all5,
+#                     #     np.hstack([
+#                     #         all1,
+#                     #         np.vstack( [all2, np.zeros((H,2*W,3),np.uint8)])
+#                     #     ])
+#                     # ])
+#                     # draw_shadow_text(summary, 'iter=%08d'%i,  (5,3*HEIGHT-15),0.5, (255,255,255), 1)
+#                     # image_show('summary',summary,1)
+#
+#                     name = train_dataset.ids[indices[b]].split('/')[-1]
+#                     #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
+#                     #cv2.imwrite(out_dir +'/train/%05d.png'%b,summary)
+#
+#                     # cv2.imwrite(out_dir + '/train/%05d.rpn_precision.png' % b,  all5)
+#                     # cv2.imwrite(out_dir + '/train/%05d.rcnn_precision..png' % b, all6)
+#                     # cv2.imwrite(out_dir + '/train/%05d.mask_precision.png' % b,  all7)
+#                     cv2.waitKey(1)
+#
+#                 net.set_mode('train')
 
     # ---------------------------------------------------------------------------
     # save last model
@@ -519,7 +520,9 @@ def run_train(train_split, val_split, resume_checkpoint=None, pretrain_file=None
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_train_603', val_split='train1_val_67')
+    run_train(train_split='train1_train_603', val_split='train1_val_67',
+              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01/checkpoint/20099_model.pth',
+              show_train_img=True)
 
     print('\nsucess!')
 

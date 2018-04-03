@@ -25,31 +25,6 @@ def run_length_encode(x):
     return rle
 
 
-#https://www.kaggle.com/stainsby/fast-tested-rle-and-input-routines
-# def run_length_encode(x):
-#     pixels = x.T.flatten()
-#     # We need to allow for cases where there is a '1' at either end of the sequence.
-#     # We do this by padding with a zero at each end when needed.
-#     use_padding = False
-#     if pixels[0] or pixels[-1]:
-#         use_padding = True
-#         pixel_padded = np.zeros([len(pixels) + 2], dtype=pixels.dtype)
-#         pixel_padded[1:-1] = pixels
-#         pixels = pixel_padded
-#     rle = np.where(pixels[1:] != pixels[:-1])[0] + 2
-#     if use_padding:
-#         rle = rle - 1
-#     rle[1::2] = rle[1::2] - rle[:-1:2]
-#
-#     #https://www.kaggle.com/c/data-science-bowl-2018/discussion/48561#
-#     if len(rle)!=0 and rle[-1]+rle[-2] == len(pixels):
-#         rle[-2] = rle[-2] -1  #print('xxx')
-#
-#     rle = ' '.join([str(r) for r in rle])
-#     return rle
-
-
-
 def run_length_decode(rle, H, W, fill_value=255):
 
     mask = np.zeros((H * W), np.uint8)
@@ -62,7 +37,6 @@ def run_length_decode(rle, H, W, fill_value=255):
     return mask
 
 
-
 #https://www.kaggle.com/wcukierski/example-metric-implementation
 def compute_precision(threshold, iou):
     matches = iou > threshold
@@ -72,6 +46,7 @@ def compute_precision(threshold, iou):
     tp, fp, fn = np.sum(true_positives), np.sum(false_positives), np.sum(false_negatives)
     return tp, fp, fn
 
+
 def print_precision(precision):
 
     print('thresh   prec    TP    FP    FN')
@@ -80,18 +55,17 @@ def print_precision(precision):
         print('%0.2f     %0.2f   %3d   %3d   %3d'%(t, p, tp, fp, fn))
 
 
-
 def compute_average_precision_for_mask(predict, truth, t_range=np.arange(0.5, 1.0, 0.05)):
 
-    num_truth   = len(np.unique(truth  ))
+    num_truth = len(np.unique(truth))
     num_predict = len(np.unique(predict))
 
     # Compute intersection between all objects
     intersection = np.histogram2d(truth.flatten(), predict.flatten(), bins=(num_truth, num_predict))[0]
 
     # Compute areas (needed for finding the union between all objects)
-    area_true = np.histogram(truth,   bins = num_truth  )[0]
-    area_pred = np.histogram(predict, bins = num_predict)[0]
+    area_true = np.histogram(truth,   bins=num_truth)[0]
+    area_pred = np.histogram(predict, bins=num_predict)[0]
     area_true = np.expand_dims(area_true, -1)
     area_pred = np.expand_dims(area_pred,  0)
 
@@ -118,15 +92,13 @@ def compute_average_precision_for_mask(predict, truth, t_range=np.arange(0.5, 1.
     return average_precision, precision
 
 
-
-
-
 #one class only-----------------------------------------------------------------
 HIT =1
 MISS=0
 TP=1
 FP=0
 INVALID=-1
+
 
 def compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5]):
 
@@ -188,8 +160,6 @@ def compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5]):
     return  precision, recall, result, truth_result
 
 
-
-
 def compute_hit_fp_for_box(proposals, truth_boxes, truth_labels):
 
     score =[]
@@ -216,8 +186,6 @@ def compute_hit_fp_for_box(proposals, truth_boxes, truth_labels):
         score = score  + list(s)
 
     return hit, fp, score, num_miss
-
-
 
 
 # check #################################################################
@@ -295,7 +263,6 @@ def run_check_run_length_decode():
     cv2.waitKey(0)
 
 
-
 def run_check_compute_precision_for_box():
 
     H,W = 256,256
@@ -352,8 +319,6 @@ def run_check_compute_precision_for_box():
         cv2.waitKey(0)
 
 
-
-# main #################################################################
 if __name__ == '__main__':
     print( '%s: calling main function ... ' % os.path.basename(__file__))
 
