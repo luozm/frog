@@ -19,24 +19,29 @@ from net.layer.mask_target import make_mask_target
 from net.layer.mask_loss import mask_loss
 
 
-## block ######################################################################################################
+# -------------------------------------------------------------------------------------------
+# Blocks for SE-ResNext-50
+#
+# https://github.com/Hsuxu/ResNeXt/blob/master/models.py
+# https://github.com/D-X-Y/ResNeXt-DenseNet/blob/master/models/resnext.py
+# https://github.com/miraclewkf/ResNeXt-PyTorch/blob/master/resnext.py
+# -------------------------------------------------------------------------------------------
 
 class ConvBn2d(nn.Module):
 
     def merge_bn(self):
-        #raise NotImplementedError
-        assert(self.conv.bias==None)
-        conv_weight     = self.conv.weight.data
-        bn_weight       = self.bn.weight.data
-        bn_bias         = self.bn.bias.data
+        assert self.conv.bias is None
+        conv_weight = self.conv.weight.data
+        bn_weight = self.bn.weight.data
+        bn_bias = self.bn.bias.data
         bn_running_mean = self.bn.running_mean
-        bn_running_var  = self.bn.running_var
-        bn_eps          = self.bn.eps
+        bn_running_var = self.bn.running_var
+        bn_eps = self.bn.eps
 
         #https://github.com/sanghoon/pva-faster-rcnn/issues/5
         #https://github.com/sanghoon/pva-faster-rcnn/commit/39570aab8c6513f0e76e5ab5dba8dfbf63e9c68c
 
-        N,C,KH,KW = conv_weight.size()
+        N, C, KH, KW = conv_weight.size()
         std = 1/(torch.sqrt(bn_running_var+bn_eps))
         std_bn_weight =(std*bn_weight).repeat(C*KH*KW,1).t().contiguous().view(N,C,KH,KW )
         conv_weight_hat = std_bn_weight*conv_weight
@@ -47,95 +52,93 @@ class ConvBn2d(nn.Module):
                               padding=self.conv.padding, stride=self.conv.stride, dilation=self.conv.dilation, groups=self.conv.groups,
                               bias=True)
         self.conv.weight.data = conv_weight_hat #fill in
-        self.conv.bias.data   = conv_bias_hat
-
-
+        self.conv.bias.data = conv_bias_hat
 
     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, dilation=1, stride=1, groups=1, is_bn=True):
         super(ConvBn2d, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, stride=stride, dilation=dilation, groups=groups, bias=False)
-        self.bn   = nn.BatchNorm2d(out_channels, eps=1e-5)
+        self.bn = nn.BatchNorm2d(out_channels, eps=1e-5)
 
         if is_bn is False:
-            self.bn =None
+            self.bn = None
 
-    def forward(self,x):
+    def forward(self, x):
         x = self.conv(x)
         if self.bn is not None:
             x = self.bn(x)
         return x
 
 
-class SEScale(nn.Module):
+class SELayer(nn.Module):
+    """SE layer
+
+    """
     def __init__(self, channel, reduction=16):
-        super(SEScale, self).__init__()
-        self.fc1 = nn.Conv2d(channel, reduction, kernel_size=1, padding=0)
-        self.fc2 = nn.Conv2d(reduction, channel, kernel_size=1, padding=0)
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Conv2d(channel, channel // reduction, kernel_size=1, padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel // reduction, channel, kernel_size=1, padding=0),
+            nn.Sigmoid()
+        )
 
     def forward(self, x):
-        x = F.adaptive_avg_pool2d(x,1)
-        x = self.fc1(x)
-        x = F.relu(x, inplace=True)
-        x = self.fc2(x)
-        x = F.sigmoid(x)
-        return x
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x)
+        y = self.fc(y)
+        return x * y
 
 
-
-#############  resnext50 pyramid feature net ###################################################################
-# https://github.com/Hsuxu/ResNeXt/blob/master/models.py
-# https://github.com/D-X-Y/ResNeXt-DenseNet/blob/master/models/resnext.py
-# https://github.com/miraclewkf/ResNeXt-PyTorch/blob/master/resnext.py
-
-
-## P layers ## ---------------------------
-class LateralBlock(nn.Module):
-    def __init__(self, c_planes, p_planes, out_planes ):
-        super(LateralBlock, self).__init__()
-        self.lateral = nn.Conv2d(c_planes,  p_planes,   kernel_size=1, padding=0, stride=1)
-        self.top     = nn.Conv2d(p_planes,  out_planes, kernel_size=3, padding=1, stride=1)
-
-    def forward(self, c , p):
-        _,_,H,W = c.size()
-        c = self.lateral(c)
-        p = F.upsample(p, scale_factor=2,mode='nearest')
-        p = p[:,:,:H,:W] + c
-        p = self.top(p)
-
-        return p
-
-## C layers ## ---------------------------
-
-# bottleneck type C
 class SENextBottleneckBlock(nn.Module):
+    """bottleneck type C
+
+    """
+
     def __init__(self, in_planes, planes, out_planes, groups, reduction=16, is_downsample=False, stride=1):
         super(SENextBottleneckBlock, self).__init__()
         self.is_downsample = is_downsample
 
-        self.conv_bn1 = ConvBn2d(in_planes,     planes, kernel_size=1, padding=0, stride=1)
-        self.conv_bn2 = ConvBn2d(   planes,     planes, kernel_size=3, padding=1, stride=stride, groups=groups)
-        self.conv_bn3 = ConvBn2d(   planes, out_planes, kernel_size=1, padding=0, stride=1)
-        self.scale    = SEScale(out_planes, reduction)
-
+        self.conv_bn1 = ConvBn2d(in_planes, planes, kernel_size=1, padding=0, stride=1)
+        self.conv_bn2 = ConvBn2d(planes, planes, kernel_size=3, padding=1, stride=stride, groups=groups)
+        self.conv_bn3 = ConvBn2d(planes, out_planes, kernel_size=1, padding=0, stride=1)
+        self.scale = SELayer(out_planes, reduction)
 
         if is_downsample:
             self.downsample = ConvBn2d(in_planes, out_planes, kernel_size=1, padding=0, stride=stride)
 
-
     def forward(self, x):
 
-        z = F.relu(self.conv_bn1(x),inplace=True)
-        z = F.relu(self.conv_bn2(z),inplace=True)
-        z =        self.conv_bn3(z)
+        z = F.relu(self.conv_bn1(x), inplace=True)
+        z = F.relu(self.conv_bn2(z), inplace=True)
+        z = self.conv_bn3(z)
 
         if self.is_downsample:
-            z = self.scale(z)*z + self.downsample(x)
+            z = self.scale(z) + self.downsample(x)
         else:
-            z = self.scale(z)*z + x
+            z = self.scale(z) + x
 
-        z = F.relu(z,inplace=True)
+        z = F.relu(z, inplace=True)
         return z
 
+
+class LateralBlock(nn.Module):
+    """P layer
+
+    """
+    def __init__(self, c_planes, p_planes, out_planes ):
+        super(LateralBlock, self).__init__()
+        self.lateral = nn.Conv2d(c_planes,  p_planes,   kernel_size=1, padding=0, stride=1)
+        self.top = nn.Conv2d(p_planes,  out_planes, kernel_size=3, padding=1, stride=1)
+
+    def forward(self, c, p):
+        _, _, H, W = c.size()
+        c = self.lateral(c)
+        p = F.upsample(p, scale_factor=2,mode='nearest')
+        p = p[:, :, :H, :W] + c
+        p = self.top(p)
+
+        return p
 
 
 def make_layer_c0(in_planes, out_planes):
@@ -147,18 +150,19 @@ def make_layer_c0(in_planes, out_planes):
     return nn.Sequential(*layers)
 
 
-
 def make_layer_c(in_planes, planes, out_planes, groups, num_blocks, stride):
-    layers = []
-    layers.append(SENextBottleneckBlock(in_planes, planes, out_planes, groups, is_downsample=True, stride=stride))
+
+    layers = [SENextBottleneckBlock(in_planes, planes, out_planes, groups, is_downsample=True, stride=stride)]
     for i in range(1, num_blocks):
         layers.append(SENextBottleneckBlock(out_planes, planes, out_planes, groups))
 
     return nn.Sequential(*layers)
 
 
-#resnext50_32x4d
 class FeatureNet(nn.Module):
+    """ResNext-50 32x4d
+
+    """
 
     def __init__(self, cfg, in_channels, out_channels=256 ):
         super(FeatureNet, self).__init__()
@@ -166,21 +170,16 @@ class FeatureNet(nn.Module):
 
         # bottom-top
         self.layer_c0 = make_layer_c0(in_channels, 64)
-
-
-        self.layer_c1 = make_layer_c(   64,  64,  256, groups=32, num_blocks=3, stride=1)  #out =  64*4 =  256
-        self.layer_c2 = make_layer_c(  256, 128,  512, groups=32, num_blocks=4, stride=2)  #out = 128*4 =  512
-        self.layer_c3 = make_layer_c(  512, 256, 1024, groups=32, num_blocks=6, stride=2)  #out = 256*4 = 1024
-        self.layer_c4 = make_layer_c( 1024, 512, 2048, groups=32, num_blocks=3, stride=2)  #out = 512*4 = 2048
-
+        self.layer_c1 = make_layer_c(64, 64, 256, groups=32, num_blocks=3, stride=1)  #out =  64*4 =  256
+        self.layer_c2 = make_layer_c(256, 128, 512, groups=32, num_blocks=4, stride=2)  #out = 128*4 =  512
+        self.layer_c3 = make_layer_c(512, 256, 1024, groups=32, num_blocks=6, stride=2)  #out = 256*4 = 1024
+        self.layer_c4 = make_layer_c(1024, 512, 2048, groups=32, num_blocks=3, stride=2)  #out = 512*4 = 2048
 
         # top-down
-        self.layer_p4 = nn.Conv2d   ( 2048, out_channels, kernel_size=1, stride=1, padding=0)
-        self.layer_p3 = LateralBlock( 1024, out_channels, out_channels)
-        self.layer_p2 = LateralBlock(  512, out_channels, out_channels)
-        self.layer_p1 = LateralBlock(  256, out_channels, out_channels)
-
-
+        self.layer_p4 = nn.Conv2d(2048, out_channels, kernel_size=1, stride=1, padding=0)
+        self.layer_p3 = LateralBlock(1024, out_channels, out_channels)
+        self.layer_p2 = LateralBlock(512, out_channels, out_channels)
+        self.layer_p1 = LateralBlock(256, out_channels, out_channels)
 
     def forward(self, x):
         #pass                        #; print('input ',   x.size())
@@ -190,7 +189,6 @@ class FeatureNet(nn.Module):
         c2 = self.layer_c2(c1)       #; print('layer_c2 ',c2.size())
         c3 = self.layer_c3(c2)       #; print('layer_c3 ',c3.size())
         c4 = self.layer_c4(c3)       #; print('layer_c4 ',c4.size())
-
 
         p4 = self.layer_p4(c4)       #; print('layer_p4 ',p4.size())
         p3 = self.layer_p3(c3, p4)   #; print('layer_p3 ',p3.size())
@@ -203,10 +201,9 @@ class FeatureNet(nn.Module):
         return features
 
 
-
-
-
-############# various head ##############################################################################################
+# -------------------------------------------------------------------------------------------
+# various heads for Mask R-CNN
+# -------------------------------------------------------------------------------------------
 
 class RpnMultiHead(nn.Module):
 
@@ -214,27 +211,25 @@ class RpnMultiHead(nn.Module):
         super(RpnMultiHead, self).__init__()
 
         self.num_classes = cfg.num_classes
-        self.num_scales  = len(cfg.rpn_scales)
-        self.num_bases   = [len(b) for b in cfg.rpn_base_apsect_ratios]
+        self.num_scales = len(cfg.rpn_scales)
+        self.num_bases = [len(b) for b in cfg.rpn_base_apsect_ratios]
 
-        self.convs  = nn.ModuleList()
+        self.convs = nn.ModuleList()
         self.logits = nn.ModuleList()
         self.deltas = nn.ModuleList()
         for l in range(self.num_scales):
-        	channels = in_channels*2
-        	self.convs.append ( nn.Conv2d(in_channels, channels, kernel_size=3, padding=1) )
-        	self.logits.append(
+            channels = in_channels*2
+            self.convs.append(nn.Conv2d(in_channels, channels, kernel_size=3, padding=1) )
+            self.logits.append(
                 nn.Sequential(
-                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes,   kernel_size=3, padding=1) ,
+                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes,   kernel_size=3, padding=1),
                 )
             )
-        	self.deltas.append(
+            self.deltas.append(
                 nn.Sequential(
                     nn.Conv2d(channels, self.num_bases[l]*self.num_classes*4, kernel_size=3, padding=1),
                 )
             )
-
-
 
     def forward(self, fs):
         batch_size = len(fs[0])
@@ -246,7 +241,7 @@ class RpnMultiHead(nn.Module):
             f = fs[l]
             f = F.relu(self.convs[l](f))
 
-            f = F.dropout(f, p=0.5,training=self.training)
+            f = F.dropout(f, p=0.5, training=self.training)
             logit = self.logits[l](f)
             delta = self.deltas[l](f)
 
@@ -267,9 +262,9 @@ class CropRoi(nn.Module):
     def __init__(self, cfg, crop_size):
         super(CropRoi, self).__init__()
         self.num_scales = len(cfg.rpn_scales)
-        self.crop_size  = crop_size
-        self.sizes      = cfg.rpn_base_sizes
-        self.scales     = cfg.rpn_scales
+        self.crop_size = crop_size
+        self.sizes = cfg.rpn_base_sizes
+        self.scales = cfg.rpn_scales
 
         self.crops = nn.ModuleList()
         for l in range(self.num_scales):
@@ -280,21 +275,24 @@ class CropRoi(nn.Module):
     def forward(self, fs, proposals):
         num_proposals = len(proposals)
 
-        ## this is  complicated. we need to decide for a given roi, which of the p0,p1, ..p3 layers to pool from
-        boxes = proposals.detach().data[:,1:5]
-        sizes = boxes[:,2:]-boxes[:,:2]
-        sizes = torch.sqrt(sizes[:,0]*sizes[:,1])
-        distances = torch.abs(sizes.view(num_proposals,1).expand(num_proposals,4) \
-                              - torch.from_numpy(np.array(self.sizes,np.float32)).cuda())
+        # this is complicated. we need to decide for a given roi, which of the p0,p1, ..p3 layers to pool from
+        boxes = proposals.detach().data[:, 1:5]
+        sizes = boxes[:, 2:]-boxes[:, :2]
+        sizes = torch.sqrt(sizes[:, 0]*sizes[:, 1])
+        distances = torch.abs(sizes.view(num_proposals, 1).expand(num_proposals, 4)
+                              - torch.from_numpy(np.array(self.sizes, np.float32)).cuda())
         min_distances, min_index = distances.min(1)
 
-        crops   = []
+        rois = proposals.detach().data[:,0:5]
+        rois = Variable(rois)
+
+        crops = []
         indices = []
         for l in range(self.num_scales):
             index = (min_index == l).nonzero()
 
             if len(index) > 0:
-                crop = self.crops[l](fs[l], proposals[index].view(-1,8))
+                crop = self.crops[l](fs[l], rois[index].view(-1, 5))
                 crops.append(crop)
                 indices.append(index)
 
@@ -329,71 +327,39 @@ class RcnnHead(nn.Module):
         return logits, deltas
 
 
-# class CropRoi(nn.Module):
-#     def __init__(self, cfg, in_channels, out_channels ):
-#         super(CropRoi, self).__init__()
-#         self.num_scales = len(cfg.rpn_scales)
-#         self.scales     = cfg.rpn_scales
-#         self.crop_size  = cfg.crop_size
-#
-#         self.convs = nn.ModuleList()
-#         self.crops = nn.ModuleList()
-#         for l in range(self.num_scales):
-#             self.convs.append(
-#                 nn.Conv2d( in_channels, out_channels//self.num_scales, kernel_size=1, padding=0, bias=False),
-#             )
-#             self.crops.append(
-#                 Crop(self.crop_size, self.crop_size, 1/self.scales[l]),
-#             )
-#
-#
-#     def forward(self, fs, proposals):
-#         rois = proposals[:,0:5]
-#         crops=[]
-#         for l in range(self.num_scales):
-#             c = self.convs[l](fs[l])
-#             c = self.crops[l](c,rois)
-#             crops.append(c)
-#         crops = torch.cat(crops,1)
-#
-#         return crops
-
-
 class MaskHead(nn.Module):
 
     def __init__(self, cfg, in_channels):
         super(MaskHead, self).__init__()
         self.num_classes = cfg.num_classes
 
+        self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=3, padding=1, stride=1)
+        self.bn1 = nn.BatchNorm2d(256)
+        self.conv2 = nn.Conv2d(256, 256, kernel_size=3, padding=1, stride=1)
+        self.bn2 = nn.BatchNorm2d(256)
+        self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, stride=1)
+        self.bn3 = nn.BatchNorm2d(256)
+        self.conv4 = nn.Conv2d(256, 256, kernel_size=3, padding=1, stride=1)
+        self.bn4 = nn.BatchNorm2d(256)
 
-        self.conv1 = nn.Conv2d( in_channels,256, kernel_size=3, padding=1, stride=1)
-        self.bn1   = nn.BatchNorm2d(256)
-        self.conv2 = nn.Conv2d(256,256, kernel_size=3, padding=1, stride=1)
-        self.bn2   = nn.BatchNorm2d(256)
-        self.conv3 = nn.Conv2d(256,256, kernel_size=3, padding=1, stride=1)
-        self.bn3   = nn.BatchNorm2d(256)
-        self.conv4 = nn.Conv2d(256,256, kernel_size=3, padding=1, stride=1)
-        self.bn4   = nn.BatchNorm2d(256)
-
-        self.up    = nn.ConvTranspose2d(256,256, kernel_size=4, padding=1, stride=2, bias=False)
-        self.logit = nn.Conv2d( 256, self.num_classes, kernel_size=1, padding=0, stride=1)
+        self.up = nn.ConvTranspose2d(256, 256, kernel_size=4, padding=1, stride=2, bias=False)
+        self.logit = nn.Conv2d(256, self.num_classes, kernel_size=1, padding=0, stride=1)
 
     def forward(self, crops):
-        x = F.relu(self.bn1(self.conv1(crops)),inplace=True)
-        x = F.relu(self.bn2(self.conv2(x)),inplace=True)
-        x = F.relu(self.bn3(self.conv3(x)),inplace=True)
-        x = F.relu(self.bn4(self.conv4(x)),inplace=True)
+        x = F.relu(self.bn1(self.conv1(crops)), inplace=True)
+        x = F.relu(self.bn2(self.conv2(x)), inplace=True)
+        x = F.relu(self.bn3(self.conv3(x)), inplace=True)
+        x = F.relu(self.bn4(self.conv4(x)), inplace=True)
         x = self.up(x)
         logits = self.logit(x)
 
         return logits
 
 
-
-############# mask rcnn net ##############################################################################
-
-
 class MaskNet(nn.Module):
+    """Mask RCNN with SE-ResNext-50
+
+    """
 
     def __init__(self, cfg):
         super(MaskNet, self).__init__()
@@ -404,11 +370,11 @@ class MaskNet(nn.Module):
         feature_channels = 256
         crop_channels = feature_channels
         self.feature_net = FeatureNet(cfg, 3, feature_channels)
-        self.rpn_head    = RpnMultiHead(cfg,feature_channels)
-        self.rcnn_crop   = CropRoi  (cfg, cfg.rcnn_crop_size)
-        self.rcnn_head   = RcnnHead (cfg, crop_channels)
-        self.mask_crop   = CropRoi  (cfg, cfg.mask_crop_size)
-        self.mask_head   = MaskHead (cfg, crop_channels)
+        self.rpn_head = RpnMultiHead(cfg, feature_channels)
+        self.rcnn_crop = CropRoi(cfg, cfg.rcnn_crop_size)
+        self.rcnn_head = RcnnHead(cfg, crop_channels)
+        self.mask_crop = CropRoi(cfg, cfg.mask_crop_size)
+        self.mask_head = MaskHead(cfg, crop_channels)
 
     def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None ):
         cfg  = self.cfg
@@ -433,7 +399,7 @@ class MaskNet(nn.Module):
 
         #rcnn proposals ------------------------------------------------
         self.rcnn_proposals = self.rpn_proposals
-        if len(self.rpn_proposals)>0:
+        if len(self.rpn_proposals) > 0:
             rcnn_crops = self.rcnn_crop(features, self.rpn_proposals)
             self.rcnn_logits, self.rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
             self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals,  self.rcnn_logits, self.rcnn_deltas)
@@ -448,11 +414,10 @@ class MaskNet(nn.Module):
         self.detections = self.rcnn_proposals
         self.masks      = make_empty_masks(cfg, mode, inputs)
 
-        if len(self.rcnn_proposals)>0:
-              mask_crops = self.mask_crop(features, self.detections)
-              self.mask_logits = data_parallel(self.mask_head, mask_crops)
-              self.masks, self.mask_proposals  = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for mask
-              self.detections = self.mask_proposals
+        if len(self.rcnn_proposals) > 0:
+            mask_crops = self.mask_crop(features, self.detections)
+            self.mask_logits = data_parallel(self.mask_head, mask_crops)
+            self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for mask
 
     def loss(self, inputs, truth_boxes, truth_labels, truth_instances):
         cfg  = self.cfg
@@ -484,7 +449,6 @@ class MaskNet(nn.Module):
         else:
             raise NotImplementedError
 
-
     def load_pretrain(self, pretrain_file, skip=[]):
         pretrain_state_dict = torch.load(pretrain_file)
         state_dict = self.state_dict()
@@ -495,15 +459,12 @@ class MaskNet(nn.Module):
             state_dict[key] = pretrain_state_dict[key]
 
         self.load_state_dict(state_dict)
-        #raise NotImplementedError
 
 
+# ------------------------------------------------------------------------------------
+# running checks
+# ------------------------------------------------------------------------------------
 
-
-
-
-
-# check #################################################################
 def run_check_feature_net():
 
     batch_size = 4
@@ -523,7 +484,6 @@ def run_check_feature_net():
     for i in range(num_heads):
         p = ps[i]
         print(i, p.size())
-
 
 
 def run_check_multi_rpn_head():
@@ -549,7 +509,6 @@ def run_check_multi_rpn_head():
     print('logits_flat ',logits_flat.size())
     print('deltas_flat ',deltas_flat.size())
     print('')
-
 
 
 def run_check_crop_head():
@@ -596,7 +555,7 @@ def run_check_crop_head():
 
     #--------------------------------------
     cfg      = Configuration()
-    crop_net = CropRoi(cfg).cuda()
+    crop_net = CropRoi(cfg, cfg.rcnn_crop_size).cuda()
     crops    = crop_net(fs, proposals)
 
     print('crops', crops.size())
@@ -657,8 +616,6 @@ def run_check_mask_head():
     print('')
 
 
-
-##-----------------------------------
 def run_check_mask_net():
 
     batch_size, C, H, W = 1, 3, 128,128
@@ -667,7 +624,7 @@ def run_check_mask_net():
     inputs = Variable(torch.from_numpy(inputs)).cuda()
 
     cfg = Configuration()
-    mask_net = MaskSingleShotNet(cfg).cuda()
+    mask_net = MaskNet(cfg).cuda()
 
     mask_net.set_mode('eval')
     mask_net(inputs)
@@ -678,15 +635,12 @@ def run_check_mask_net():
     print('')
 
 
-
-
-# main #################################################################
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
+    print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_check_feature_net()
+#    run_check_feature_net()
     # run_check_multi_rpn_head()
-    # run_check_crop_head()
+    run_check_crop_head()
     # run_check_rcnn_head()
     # run_check_mask_head()
 

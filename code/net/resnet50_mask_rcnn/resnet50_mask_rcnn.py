@@ -369,7 +369,7 @@ class MaskRcnnNet(nn.Module):
 
         #rcnn proposals ------------------------------------------------
         self.rcnn_proposals = self.rpn_proposals
-        if len(self.rpn_proposals)>0:
+        if len(self.rpn_proposals) > 0:
             rcnn_crops = self.rcnn_crop(features, self.rpn_proposals)
             self.rcnn_logits, self.rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
             self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals,  self.rcnn_logits, self.rcnn_deltas)
@@ -432,11 +432,6 @@ class MaskRcnnNet(nn.Module):
 
         self.load_state_dict(state_dict)
         #raise NotImplementedError
-
-
-
-
-
 
 
 # check #################################################################

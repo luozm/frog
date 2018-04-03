@@ -61,7 +61,7 @@ class ScienceDataset(Dataset):
             if self.transform is not None:
                 return self.transform(image, multi_mask, meta, index)
             else:
-                return input, multi_mask, meta, index
+                return image, multi_mask, meta, index
 
         if self.mode in ['test']:
             if self.transform is not None:

@@ -318,12 +318,12 @@ def run_npy_to_sumbit_csv(image_dir, submit_dir, csv_file):
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-#    run_submit()
-    run_npy_to_sumbit_csv(
-        image_dir=IMAGE_DIR + 'stage1_test/images',
-        submit_dir=RESULTS_DIR + 'mask-rcnn-50-train607-01/submit/',
-        csv_file='submission-train607-01.csv'
-    )
+    run_submit()
+#     run_npy_to_sumbit_csv(
+#         image_dir=IMAGE_DIR + 'stage1_test/images',
+#         submit_dir=RESULTS_DIR + 'mask-rcnn-50-train607-01/submit/',
+#         csv_file='submission-train607-01.csv'
+#     )
     # run_npy_to_sumbit_csv(
     #     image_dir=IMAGE_DIR + 'stage1_test/images',
     #     submit_dir=RESULTS_DIR + 'mask-rcnn-50-gray500-02/submit/',
