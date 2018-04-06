@@ -145,6 +145,7 @@ def run_evaluate(val_split, out_dir, checkpoint):
     log.write('** start evaluation here! **\n')
     mask_average_precisions = []
     box_precisions_50 = []
+    rpn_box_precisions_50 = []
 
     test_num = 0
     test_loss = np.zeros(5, np.float32)
@@ -174,6 +175,7 @@ def run_evaluate(val_split, out_dir, checkpoint):
         # rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
         # proposals  = net.rpn_proposals
         masks = net.masks
+        rpn_proposals = net.rpn_proposals.cpu().numpy()
         detections = net.detections.cpu().numpy()
 
         for b in range(batch_size):
@@ -182,9 +184,17 @@ def run_evaluate(val_split, out_dir, checkpoint):
             height,width = image.shape[:2]
             mask = masks[b]
 
-            index = np.where(detections[:, 0] == b)[0]
-            detection = detections[index]
-            box = detection[:, 1:5]
+            rpn_proposal = np.zeros((0, 7), np.float32)
+            if len(rpn_proposals) > 0:
+                index = np.where(rpn_proposals[:, 0] == b)[0]
+                rpn_proposal = rpn_proposals[index]
+                rpn_box = rpn_proposal[:, 1:5]
+
+            detection = np.zeros((0, 7), np.float32)
+            if len(detections) > 0:
+                index = np.where(detections[:, 0] == b)[0]
+                detection = detections[index]
+                box = detection[:, 1:5]
 
             truth_mask = instance_to_multi_mask(truth_instances[b])
             truth_box = truth_boxes[b]
@@ -194,25 +204,32 @@ def run_evaluate(val_split, out_dir, checkpoint):
             mask_average_precision, mask_precision =\
                 compute_average_precision_for_mask(mask, truth_mask, t_range=np.arange(0.5, 1.0, 0.05))
 
+            rpn_box_precision, _, _, _ = \
+                compute_precision_for_box(rpn_box, truth_box, truth_label, threshold=[0.5])
+            rpn_box_precision = rpn_box_precision[0]
+
             box_precision, box_recall, box_result, truth_box_result = \
                 compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5])
             box_precision = box_precision[0]
 
             mask_average_precisions.append(mask_average_precision)
             box_precisions_50.append(box_precision)
+            rpn_box_precisions_50.append(rpn_box_precision)
 
             # --------------------------------------------
             id = test_dataset.ids[indices[b]]
             name =id.split('/')[-1]
 #            print('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
-            log.write('%d\t%s\t%0.5f  (%0.5f)\n'%(i,name,mask_average_precision, box_precision))
+            log.write('%d\t%s\t%0.5f,%0.5f,%0.5f\n'%(i, name, rpn_box_precision, box_precision, mask_average_precision))
 
-            #----
+            # ----
             contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0,255,0])
             color_overlay = multi_mask_to_color_overlay(mask, color='summer')
             color1_overlay = multi_mask_to_contour_overlay(mask, color_overlay, color=[255,255,255])
             all1 = np.hstack((image, contour_overlay, color1_overlay))
 
+            all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal, truth_box, truth_label,
+                                              [0, 255, 255], [255, 0, 255], [255, 255, 0])
             all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
             all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
 
@@ -248,10 +265,12 @@ def run_evaluate(val_split, out_dir, checkpoint):
     log.write('\n')
 
     mask_average_precisions = np.array(mask_average_precisions)
+    rpn_box_precisions_50 = np.array(rpn_box_precisions_50)
     box_precisions_50 = np.array(box_precisions_50)
     log.write('-------------\n')
-    log.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
+    log.write('rpn_box_precision@0.5 = %0.5f\n' % rpn_box_precisions_50.mean())
     log.write('box_precision@0.5 = %0.5f\n' % box_precisions_50.mean())
+    log.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
     log.write('\n')
 
 
