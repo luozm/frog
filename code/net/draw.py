@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 
 from net.layer.rpn_multi_nms import rpn_decode
-from net.layer.rpn_multi_target import unflat_to_c3, draw_shadow_text, to_color
+from net.layer.rpn_multi_target import unflat_to_c3
+from utility.draw import draw_shadow_text, to_color
 from net.metric import HIT, MISS, INVALID, TP, FP, compute_precision_for_box, draw_screen_rect, compute_precision
 from dataset.reader import instance_to_multi_mask, multi_mask_to_contour_overlay
 
@@ -37,7 +38,6 @@ def draw_multi_rpn_prob(cfg, image, rpn_prob_flat):
     draw_shadow_text(all,'rpn-prob', (5,15),0.5, (255,255,255), 1)
 
     return all
-
 
 
 def draw_multi_rpn_delta(cfg, image, rpn_prob_flat, rpn_delta_flat, window, color=[255,255,255]):
@@ -99,23 +99,24 @@ def draw_truth_box(cfg, image, truth_box, truth_label):
     return image
 
 
-def draw_multi_proposal_metric(cfg, image, proposal, truth_box, truth_label,
-                          color0=[0,255,255], color1=[255,0,255], color2=[255,255,0],thickness=1):
+def draw_multi_proposal_metric(
+        cfg, image, proposal, truth_box, truth_label,
+        color0=[0,255,255], color1=[255,0,255], color2=[255,255,0],thickness=1):
 
-    H,W = image.shape[:2]
-    image_truth    = image.copy()  #yellow
-    image_proposal = image.copy()  #pink
-    image_hit      = image.copy()  #cyan
-    image_miss     = image.copy()  #yellow
-    image_fp       = image.copy()  #pink
-    image_invalid  = image.copy()  #white
+    H, W = image.shape[:2]
+    image_truth = image.copy()  # yellow
+    image_proposal = image.copy()  # pink
+    image_hit = image.copy()  # cyan
+    image_miss = image.copy()  # yellow
+    image_fp = image.copy()  # pink
+    image_invalid = image.copy()  # white
     precision = 0
 
-    if len(proposal)>0 and len(truth_box)>0:
+    if len(proposal) > 0 and len(truth_box) > 0:
 
-        thresholds=[0.5,]
+        thresholds = [0.5, ]
 
-        box = proposal[:,1:5]
+        box = proposal[:, 1:5]
         precisions, recalls, results, truth_results = \
             compute_precision_for_box(box, truth_box, truth_label, thresholds)
 
@@ -124,7 +125,6 @@ def draw_multi_proposal_metric(cfg, image, proposal, truth_box, truth_label,
         if 1:
             precision, recall, result, truth_result, threshold = \
                 precisions[0], recalls[0], results[0], truth_results[0], thresholds[0]
-
 
             for i,b in enumerate(truth_box):
                 x0,y0,x1,y1 = b.astype(np.int32)
@@ -160,8 +160,8 @@ def draw_multi_proposal_metric(cfg, image, proposal, truth_box, truth_label,
     draw_shadow_text(image_fp,  'fp',   (5,15),0.5, (255,255,255), 1)
     draw_shadow_text(image_invalid, 'n.a.', (5,15),0.5, (255,255,255), 1)
 
-    all = np.hstack([image_truth,image_proposal,image_hit,image_miss,image_fp,image_invalid])
-    draw_shadow_text(all,'%0.2f prec@0.5'%precision, (5,H-15),0.5, (255,255,255), 1)
+    all = np.hstack([image_truth,image_proposal, image_hit, image_miss, image_fp, image_invalid])
+    draw_shadow_text(all, '%0.2f prec@0.5' % precision, (5, H-15), 0.5, (255, 255, 255), 1)
     return all
 
 

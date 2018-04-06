@@ -73,7 +73,6 @@ class ScienceDataset(Dataset):
         return len(self.ids)
 
 
-
 # draw  ----------------------------------------------------------------
 # def multi_mask_to_overlay_0(multi_mask):
 #     overlay = skimage.color.label2rgb(multi_mask, bg_label=0, bg_color=(0, 0, 0))*255
@@ -107,7 +106,6 @@ def multi_mask_to_color_overlay(multi_mask, image=None, color=None):
     return overlay
 
 
-
 def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255,255,255]):
 
     height,width = multi_mask.shape[:2]
@@ -122,7 +120,9 @@ def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255,255,255]):
 
     return overlay
 
+
 # modifier  ----------------------------------------------------------------
+
 
 def mask_to_outer_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
@@ -134,15 +134,17 @@ def mask_to_outer_contour(mask):
     )
     return contour
 
+
 def mask_to_inner_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
     contour = mask & (
-            (pad[1:-1,1:-1] != pad[:-2,1:-1])
-          | (pad[1:-1,1:-1] != pad[2:,1:-1])
-          | (pad[1:-1,1:-1] != pad[1:-1,:-2])
-          | (pad[1:-1,1:-1] != pad[1:-1,2:])
+            (pad[1:-1, 1:-1] != pad[:-2, 1:-1])
+          | (pad[1:-1, 1:-1] != pad[2:, 1:-1])
+          | (pad[1:-1, 1:-1] != pad[1:-1, :-2])
+          | (pad[1:-1, 1:-1] != pad[1:-1, 2:])
     )
     return contour
+
 
 def multi_mask_to_annotation(multi_mask):
     H,W      = multi_mask.shape[:2]
@@ -152,10 +154,10 @@ def multi_mask_to_annotation(multi_mask):
 
     num_masks = multi_mask.max()
     for i in range(num_masks):
-        mask = (multi_mask==(i+1))
-        if mask.sum()>1:
+        mask = (multi_mask == (i+1))
+        if mask.sum() > 1:
 
-            y,x = np.where(mask)
+            y, x = np.where(mask)
             y0 = y.min()
             y1 = y.max()
             x0 = x.min()
@@ -163,23 +165,20 @@ def multi_mask_to_annotation(multi_mask):
             w = (x1-x0)+1
             h = (y1-y0)+1
 
-
             border = max(2, round(0.2*(w+h)/2))
-            #border = max(1, round(0.1*min(w,h)))
-            #border = 0
+
             x0 = x0-border
             x1 = x1+border
             y0 = y0-border
             y1 = y1+border
 
-            #clip
+            # clip
             x0 = max(0,x0)
             y0 = max(0,y0)
             x1 = min(W-1,x1)
             y1 = min(H-1,y1)
 
-
-            #label
+            # label
             l = 1 #<todo> support multiclass later ... ?
             if is_small_box_at_boundary((x0,y0,x1,y1),W,H,MIN_SIZE):
                 l = IGNORE_BOUNDARY
@@ -196,13 +195,13 @@ def multi_mask_to_annotation(multi_mask):
             label.append(l)
             instance.append(mask)
 
-    box      = np.array(box,np.float32)
-    label    = np.array(label,np.float32)
+    box = np.array(box,np.float32)
+    label = np.array(label,np.float32)
     instance = np.array(instance,np.float32)
 
-    if len(box)==0:
-        box      = np.zeros((0,4),np.float32)
-        label    = np.zeros((0,1),np.float32)
+    if len(box) == 0:
+        box = np.zeros((0,4),np.float32)
+        label = np.zeros((0,1),np.float32)
         instance = np.zeros((0,H,W),np.float32)
 
     return box, label, instance
@@ -218,9 +217,6 @@ def instance_to_multi_mask(instance):
          multi_mask[instance[i]>0] = i+1
 
     return multi_mask
-
-
-
 
 
 ##------------------------------------------------------
@@ -297,7 +293,6 @@ def instance_to_multi_mask(instance):
 #     return center, delta
 
 
-# check ##################################################################################3
 def run_check_dataset_reader():
 
     def augment(image, multi_mask, meta, index):
@@ -341,7 +336,6 @@ def run_check_dataset_reader():
 #            cv2.waitKey(0)
 
 
-# main #################################################################
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 

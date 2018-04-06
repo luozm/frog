@@ -466,6 +466,17 @@ class GaussianDistortion:
         return augmented_images
 
 
+def normalize_transform(image):
+    # image = image[:,:,0]
+    # image = image.reshape(image.shape+(1,))
+    std = np.std(image)
+    if std <1e-10 or std>1e10:
+        return None
+    mean = np.mean(image)
+    image_trans = (image-mean)/std
+    return image_trans
+
+
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
     from dataset.reader import ScienceDataset
@@ -481,27 +492,25 @@ if __name__ == '__main__':
 
     dataset = ScienceDataset('train1_train_603', img_folder='train1_norm', mask_folder='stage1_train', mode='train')
 
+    img = dataset[572]
+
     for img, mask, meta, idx in dataset:
-        mask_re = mask.reshape(mask.shape + (1,))
-        img_concat = np.stack((img[:, :, 0], mask), axis=2)
-        result = random_contrast_transform(img, u=1)
-        result2 = random_brightness_transform(img, u=1)
-
-        p2, p98 = np.percentile(img, (2, 98))
-        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
-
-        # Adaptive Equalization
-        img_adapteq = exposure.equalize_adapthist(img, clip_limit=0.03)
+        if img.shape[0]<513 and img.shape[1]<513:
+            print(idx)
+            'f4c4db3df4ff0de90f44b027fc2e28c16bf7e5c75ea75b0a9762bbb7ac86e7a3'
+        # mask_re = mask.reshape(mask.shape + (1,))
+        # img_concat = np.stack((img[:, :, 0], mask), axis=2)
+        # result = random_contrast_transform(img, u=1)
+        # result2 = random_brightness_transform(img, u=1)
+        # img_norm = normalize_transform(img)
 
         # result = elastic_transform_2(img[:,:,0],img.shape[1]*2, img.shape[1]*0.08)
-        plt.imshow(img)
-        plt.figure()
-        plt.imshow(img_adapteq)
-        plt.figure()
-        plt.imshow(result2)
-        plt.figure()
-        plt.imshow(img_rescale)
-        plt.show()
+        # plt.imshow(img)
+        # plt.figure()
+        # plt.imshow(img_adapteq)
+        # plt.figure()
+        # plt.imshow(result2)
+
 #        elastic_transform(img_concat, img_concat.shape[1]*2, img_concat.shape[1]*0.08, img_concat.shape[1]*0.08)
     print()
 

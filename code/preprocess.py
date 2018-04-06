@@ -151,14 +151,14 @@ if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
     # write train & test split file
-    make_download_split_file(DOWNLOAD_DIR + 'stage1_train', 'train1_all')
-    make_download_split_file(DOWNLOAD_DIR + 'stage1_test', 'test1_all')
+#    make_download_split_file(DOWNLOAD_DIR + 'kaggle-dsbowl-2018-dataset-fixes-master/stage1_train', 'train1_fixed_all')
+#    make_download_split_file(DOWNLOAD_DIR + 'stage1_test', 'test1_all')
 
     # run_make_train_annotation(
-    #     split_file='train1_all_670',
-    #     img_folder='stage1_train',
-    #     out_dir=IMAGE_DIR + 'stage1_train')
-    #
+    #     split_file='train1_fixed_all_664',
+    #     img_folder='kaggle-dsbowl-2018-dataset-fixes-master/stage1_train',
+    #     out_dir=IMAGE_DIR + 'stage1_train_fixed')
+
     # run_make_test_annotation(
     #     split_file='test1_all_65',
     #     img_folder='stage1_test',
@@ -168,24 +168,24 @@ if __name__ == '__main__':
     #     split_file='train1_all_670',
     #     img_folder='stage1_train')
 
-    run_classify_norm_imgs(split_file='train1_all_670',
-                           img_folder='stage1_train',
-                           out_folder='train1_norm',
+    run_classify_norm_imgs(split_file='train1_fixed_all_664',
+                           img_folder='stage1_train_fixed',
+                           out_folder='train1_fixed_norm',
                            out_split_prefix_list=[
-                               'train1_gray_black',
-                               'train1_purple',
-                               'train1_gray_white'],
+                               'train1_fixed_gray_black',
+                               'train1_fixed_purple',
+                               'train1_fixed_gray_white'],
                            write_split=True)
 
-    run_classify_norm_imgs(split_file='test1_all_65',
-                           img_folder='stage1_test',
-                           out_folder='test1_norm',
-                           out_split_prefix_list=[
-                               'test1_gray_black',
-                               'test1_purple',
-                               'test1_gray_white'],
-                           write_split=True)
+    # run_classify_norm_imgs(split_file='test1_all_65',
+    #                        img_folder='stage1_test',
+    #                        out_folder='test1_norm',
+    #                        out_split_prefix_list=[
+    #                            'test1_gray_black',
+    #                            'test1_purple',
+    #                            'test1_gray_white'],
+    #                        write_split=True)
 
-#    split_train_val('train1_all_670')
+    split_train_val('train1_fixed_all_664')
 
     print('sucess!')

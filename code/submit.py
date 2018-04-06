@@ -13,19 +13,23 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import SequentialSampler
 from torch.utils.data.dataloader import DataLoader
 
-from dataset.transform import pad_to_factor
+from dataset.transform import pad_to_factor, normalize_transform
 from dataset.reader import ScienceDataset, multi_mask_to_color_overlay, mask_to_inner_contour
 from utility.file import Logger, read_list_from_file
 from utility.draw import image_show
 from net.metric import run_length_encode
 from net.draw import multi_mask_to_contour_overlay
-from net.resnet50_mask_rcnn.configuration import Configuration
-from net.resnet50_mask_rcnn.resnet50_mask_rcnn import MaskRcnnNet
+from net.se_resnext50_mask_rcnn.configuration import Configuration
+from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
 
 
-## overwrite functions ###
 def revert(net, images):
-    #undo test-time-augmentation (e.g. unpad or scale back to input image size, etc)
+    """
+    undo test-time-augmentation (e.g. unpad or scale back to input image size, etc)
+    :param net:
+    :param images:
+    :return:
+    """
 
     def torch_clip_proposals(proposals, index, width, height):
         boxes = torch.stack((
@@ -68,7 +72,8 @@ def revert(net, images):
 # -----------------------------------------------------------------------------------
 def submit_augment(image, index):
     pad_image = pad_to_factor(image, factor=16)
-    input = torch.from_numpy(pad_image.transpose((2, 0, 1))).float().div(255)
+    image = normalize_transform(pad_image)
+    input = torch.from_numpy(image.transpose((2, 0, 1))).float()#.div(255)
     return input, image, index
 
 
@@ -83,11 +88,9 @@ def submit_collate(batch):
 
 
 # --------------------------------------------------------------
-def run_submit():
+def run_submit(out_dir, checkpoint):
 
-    out_dir = RESULTS_DIR + 'mask-rcnn-50-train607-01/'
-    initial_checkpoint = \
-        RESULTS_DIR + 'mask-rcnn-50-train607-01/checkpoint/00004999_model.pth'
+    initial_checkpoint = out_dir + 'checkpoint/' + checkpoint
 
     ## setup  ---------------------------
     os.makedirs(out_dir + 'submit/overlays/', exist_ok=True)
@@ -108,7 +111,7 @@ def run_submit():
 
     ## net ------------------------------
     cfg = Configuration()
-    net = MaskRcnnNet(cfg).cuda()
+    net = MaskNet(cfg).cuda()
 
     if initial_checkpoint is not None:
         log.write('\tinitial_checkpoint = %s\n' % initial_checkpoint)
@@ -156,6 +159,7 @@ def run_submit():
         time.sleep(0.01)
 
         net.set_mode('test')
+
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
@@ -208,8 +212,8 @@ def run_submit():
             cv2.imwrite(out_dir + 'submit/psds/%s/%s.mask.png'%(name,name),color_overlay)
             cv2.imwrite(out_dir + 'submit/psds/%s/%s.contour.png'%(name,name),contour_overlay)
 
-            image_show('all', all)
-            cv2.waitKey(1)
+#            image_show('all', all)
+#            cv2.waitKey(1)
 
     assert(test_num == len(test_loader.sampler))
 
@@ -318,12 +322,15 @@ def run_npy_to_sumbit_csv(image_dir, submit_dir, csv_file):
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit()
-#     run_npy_to_sumbit_csv(
-#         image_dir=IMAGE_DIR + 'stage1_test/images',
-#         submit_dir=RESULTS_DIR + 'mask-rcnn-50-train607-01/submit/',
-#         csv_file='submission-train607-01.csv'
-#     )
+    run_submit(
+        out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train603-norm-01/',
+        checkpoint='00003500_model.pth')
+
+    run_npy_to_sumbit_csv(
+        image_dir=IMAGE_DIR + 'stage1_test/images',
+        submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train603-norm-01/submit/',
+        csv_file='submission-senet-train607-norm-01.csv'
+    )
     # run_npy_to_sumbit_csv(
     #     image_dir=IMAGE_DIR + 'stage1_test/images',
     #     submit_dir=RESULTS_DIR + 'mask-rcnn-50-gray500-02/submit/',

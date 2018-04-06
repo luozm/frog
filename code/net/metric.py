@@ -6,6 +6,13 @@ from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_ove
 from common import DATA_DIR
 from utility.draw import image_show, draw_screen_rect, draw_dotted_rect
 
+# one class only-----------------------------------------------------------------
+HIT = 1
+MISS = 0
+TP = 1
+FP = 0
+INVALID = -1
+
 
 def run_length_encode(x):
     bs = np.where(x.T.flatten())[0]
@@ -92,14 +99,6 @@ def compute_average_precision_for_mask(predict, truth, t_range=np.arange(0.5, 1.
     return average_precision, precision
 
 
-#one class only-----------------------------------------------------------------
-HIT =1
-MISS=0
-TP=1
-FP=0
-INVALID=-1
-
-
 def compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5]):
 
     num_truth_box = len(truth_box)
@@ -157,7 +156,7 @@ def compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5]):
         #     results = results[0]
         #     truth_results = truth_results[0]
 
-    return  precision, recall, result, truth_result
+    return precision, recall, result, truth_result
 
 
 def compute_hit_fp_for_box(proposals, truth_boxes, truth_labels):

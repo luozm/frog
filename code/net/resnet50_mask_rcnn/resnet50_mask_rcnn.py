@@ -137,9 +137,6 @@ class FeatureNet(nn.Module):
         return features
 
 
-
-
-
 ############# various head ##############################################################################################
 
 class RpnMultiHead(nn.Module):
@@ -155,14 +152,14 @@ class RpnMultiHead(nn.Module):
         self.logits = nn.ModuleList()
         self.deltas = nn.ModuleList()
         for l in range(self.num_scales):
-        	channels = in_channels*2
-        	self.convs.append ( nn.Conv2d(in_channels, channels, kernel_size=3, padding=1) )
-        	self.logits.append(
+            channels = in_channels*2
+            self.convs.append(nn.Conv2d(in_channels, channels, kernel_size=3, padding=1))
+            self.logits.append(
                 nn.Sequential(
-                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes,   kernel_size=3, padding=1) ,
+                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes,   kernel_size=3, padding=1),
                 )
             )
-        	self.deltas.append(
+            self.deltas.append(
                 nn.Sequential(
                     nn.Conv2d(channels, self.num_bases[l]*self.num_classes*4, kernel_size=3, padding=1),
                 )

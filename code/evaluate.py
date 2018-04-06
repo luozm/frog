@@ -19,10 +19,6 @@ from net.se_resnext50_mask_rcnn.configuration import Configuration
 from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
 
 
-
-##--------------------------------------------------------------
-
-
 ## overwrite functions ###
 def revert(net, images):
 
@@ -77,7 +73,6 @@ def eval_augment(image, multi_mask, meta, index):
 def eval_collate(batch):
 
     batch_size = len(batch)
-    #for b in range(batch_size): print (batch[b][0].size())
     inputs    = torch.stack([batch[b][0]for b in range(batch_size)], 0)
     boxes     =             [batch[b][1]for b in range(batch_size)]
     labels    =             [batch[b][2]for b in range(batch_size)]
@@ -90,12 +85,7 @@ def eval_collate(batch):
 
 
 # --------------------------------------------------------------
-def run_evaluate(val_split):
-
-    out_dir = RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01'
-    initial_checkpoint = \
-        RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01/checkpoint/20248_model.pth'
-        ##
+def run_evaluate(val_split, out_dir, checkpoint):
 
     ## setup  ---------------------------
     os.makedirs(out_dir + '/evaluate/overlays', exist_ok=True)
@@ -119,9 +109,9 @@ def run_evaluate(val_split):
     # cfg.rpn_test_nms_pre_score_threshold  = 0.8 #0.885#0.5
 
     net = MaskNet(cfg).cuda()
-    if initial_checkpoint is not None:
-        log.write('\tinitial_checkpoint = %s\n' % initial_checkpoint)
-        net.load_state_dict(torch.load(initial_checkpoint, map_location=lambda storage, loc: storage))
+    if checkpoint is not None:
+        log.write('\tinitial_checkpoint = %s\n' % checkpoint)
+        net.load_state_dict(torch.load(checkpoint, map_location=lambda storage, loc: storage))
 
     log.write('%s\n\n'%(type(net)))
     log.write('\n')
@@ -157,7 +147,7 @@ def run_evaluate(val_split):
     box_precisions_50 = []
 
     test_num = 0
-    test_loss = np.zeros(5,np.float32)
+    test_loss = np.zeros(5, np.float32)
     test_acc = 0
     for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, images, indices) in enumerate(test_loader, 0):
         if all((truth_label > 0).sum() == 0 for truth_label in truth_labels):
@@ -214,8 +204,8 @@ def run_evaluate(val_split):
             # --------------------------------------------
             id = test_dataset.ids[indices[b]]
             name =id.split('/')[-1]
-            print('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
-            log.write('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
+#            print('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
+            log.write('%d\t%s\t%0.5f  (%0.5f)\n'%(i,name,mask_average_precision, box_precision))
 
             #----
             contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0,255,0])
@@ -251,7 +241,7 @@ def run_evaluate(val_split):
     test_acc = test_acc/test_num
     test_loss = test_loss/test_num
 
-    log.write('initial_checkpoint  = %s\n'%(initial_checkpoint))
+    log.write('initial_checkpoint  = %s\n'%checkpoint)
     log.write('test_acc  = %0.5f\n'%(test_acc))
     log.write('test_loss = %0.5f\n'%(test_loss[0]))
     log.write('test_num  = %d\n'%(test_num))
@@ -265,81 +255,13 @@ def run_evaluate(val_split):
     log.write('\n')
 
 
-# ## evaluate post process here ####-------------------------------------
-# def run_evaluate_map():
-#
-#     out_dir = RESULTS_DIR + '/mask-rcnn-gray-011b-drop1'
-#     split   = 'valid1_ids_gray_only_43'
-#
-#     #------------------------------------------------------------------
-#     log = Logger()
-#     log.open(out_dir+'/log.evaluate.txt',mode='a')
-#
-#     #os.makedirs(out_dir +'/eval/'+split+'/label', exist_ok=True)
-#     #os.makedirs(out_dir +'/eval/'+split+'/final', exist_ok=True)
-#
-#
-#     image_files = glob.glob(out_dir + '/submit/npys/*.png')
-#     image_files.sort()
-#
-#     average_precisions = []
-#     for image_file in image_files:
-#         #image_file = image_dir + '/0a849e0eb15faa8a6d7329c3dd66aabe9a294cccb52ed30a90c8ca99092ae732.png'
-#
-#         name  = image_file.split('/')[-1].replace('.png','')
-#
-#         image   = cv2.imread(DATA_DIR + '/image/stage1_train/' + name + '/images/' + name +'.png')
-#         truth   = np.load(DATA_DIR    + '/image/stage1_train/' + name + '/multi_mask.npy').astype(np.int32)
-#         predict = np.load(out_dir     + '/submit/npys/' + name + '.npy').astype(np.int32)
-#         assert(predict.shape == truth.shape)
-#         assert(predict.shape[:2] == image.shape[:2])
-#
-#
-#         #image_show('image',image)
-#         #image_show('mask',mask)
-#         #cv2.waitKey(0)
-#
-#
-#         #baseline labeling  -------------------------
-#
-#
-#         # fill hole, file small, etc ...
-#         # label = filter_small(label, threshold=15)
-#
-#
-#         average_precision, precision = compute_average_precision(predict, truth)
-#         average_precisions.append(average_precision)
-#
-#         #save and show  -------------------------
-#         print(average_precision)
-#
-#         # overlay = (skimage.color.label2rgb(label, bg_label=0, bg_color=(0, 0, 0))*255).astype(np.uint8)
-#         # cv2.imwrite(out_dir +'/eval/'+split+'/label/' + name + '.png',overlay)
-#         # np.save    (out_dir +'/eval/'+split+'/label/' + name + '.npy',label)
-#
-#
-#         # overlay1 = draw_label_contour (image, label )
-#         # mask  = cv2.cvtColor(mask,cv2.COLOR_GRAY2BGR)
-#         # final = np.hstack((image, overlay1, overlay, mask))
-#         # final = final.astype(np.uint8)
-#         # cv2.imwrite(out_dir +'/eval/'+split+'/final/' + name + '.png',final)
-#         #
-#         #
-#         # image_show('image',image)
-#         # image_show('mask',mask)
-#         # image_show('overlay',overlay)
-#         # cv2.waitKey(1)
-#
-#     ##----------------------------------------------
-#     average_precisions = np.array(average_precisions)
-#     log.write('-------------\n')
-#     log.write('average_precision = %0.5f\n'%average_precisions.mean())
-#     log.write('\n')
-
-
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
-    torch.backends.cudnn.benchmark = True
-    run_evaluate('train1_val_67')
+    torch.backends.cudnn.benchmark = False
+#    run_evaluate('train1_val_67')
+    run_evaluate(
+        'train1_train_603',
+        RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01',
+        RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-01/checkpoint/00039999_model.pth')
 
     print('\nsucess!')

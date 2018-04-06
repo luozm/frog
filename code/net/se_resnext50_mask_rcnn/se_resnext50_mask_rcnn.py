@@ -210,7 +210,6 @@ class RpnMultiHead(nn.Module):
     def __init__(self, cfg, in_channels):
         super(RpnMultiHead, self).__init__()
 
-        self.num_classes = cfg.num_classes
         self.num_scales = len(cfg.rpn_scales)
         self.num_bases = [len(b) for b in cfg.rpn_base_apsect_ratios]
 
@@ -219,15 +218,15 @@ class RpnMultiHead(nn.Module):
         self.deltas = nn.ModuleList()
         for l in range(self.num_scales):
             channels = in_channels*2
-            self.convs.append(nn.Conv2d(in_channels, channels, kernel_size=3, padding=1) )
+            self.convs.append(nn.Conv2d(in_channels, channels, kernel_size=3, padding=1))
             self.logits.append(
                 nn.Sequential(
-                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes,   kernel_size=3, padding=1),
+                    nn.Conv2d(channels, self.num_bases[l]*2,   kernel_size=3, padding=1),
                 )
             )
             self.deltas.append(
                 nn.Sequential(
-                    nn.Conv2d(channels, self.num_bases[l]*self.num_classes*4, kernel_size=3, padding=1),
+                    nn.Conv2d(channels, self.num_bases[l]*2*4, kernel_size=3, padding=1),
                 )
             )
 
@@ -235,7 +234,6 @@ class RpnMultiHead(nn.Module):
         batch_size = len(fs[0])
 
         logits_flat = []
-        probs_flat  = []
         deltas_flat = []
         for l in range(self.num_scales):  # apply multibox head to feature maps
             f = fs[l]
@@ -245,13 +243,13 @@ class RpnMultiHead(nn.Module):
             logit = self.logits[l](f)
             delta = self.deltas[l](f)
 
-            logit_flat = logit.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, self.num_classes)
-            delta_flat = delta.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, self.num_classes, 4)
+            logit_flat = logit.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)
+            delta_flat = delta.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2, 4)
             logits_flat.append(logit_flat)
             deltas_flat.append(delta_flat)
 
-        logits_flat = torch.cat(logits_flat,1)
-        deltas_flat = torch.cat(deltas_flat,1)
+        logits_flat = torch.cat(logits_flat, 1)
+        deltas_flat = torch.cat(deltas_flat, 1)
 
         return logits_flat, deltas_flat
 
@@ -283,7 +281,7 @@ class CropRoi(nn.Module):
                               - torch.from_numpy(np.array(self.sizes, np.float32)).cuda())
         min_distances, min_index = distances.min(1)
 
-        rois = proposals.detach().data[:,0:5]
+        rois = proposals.detach().data[:, 0:5]
         rois = Variable(rois)
 
         crops = []
@@ -296,9 +294,9 @@ class CropRoi(nn.Module):
                 crops.append(crop)
                 indices.append(index)
 
-        crops   = torch.cat(crops,0)
-        indices = torch.cat(indices,0).view(-1)
-        crops   = crops[torch.sort(indices)[1]]
+        crops = torch.cat(crops, 0)
+        indices = torch.cat(indices, 0).view(-1)
+        crops = crops[torch.sort(indices)[1]]
         #crops = torch.index_select(crops,0,index)
 
         return crops
@@ -376,41 +374,38 @@ class MaskNet(nn.Module):
         self.mask_crop = CropRoi(cfg, cfg.mask_crop_size)
         self.mask_head = MaskHead(cfg, crop_channels)
 
-    def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None ):
+    def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None):
         cfg = self.cfg
         mode = self.mode
         batch_size = len(inputs)
 
-        #features
+        # features
         features = data_parallel(self.feature_net, inputs)
 
-        #rpn proposals -------------------------------------------
+        # rpn proposals -------------------------------------------
         self.rpn_logits_flat, self.rpn_deltas_flat = data_parallel(self.rpn_head, features)
-        self.rpn_window    = make_rpn_windows(cfg, features)
+        self.rpn_window = make_rpn_windows(cfg, features)
         self.rpn_proposals = rpn_nms(cfg, mode, inputs, self.rpn_window, self.rpn_logits_flat, self.rpn_deltas_flat)
 
         if mode in ['train', 'valid']:
             self.rpn_labels, self.rpn_label_assigns, self.rpn_label_weights, self.rpn_targets, self.rpn_target_weights = \
-                make_rpn_target(cfg, mode, inputs, self.rpn_window, truth_boxes, truth_labels )
+                make_rpn_target(cfg, mode, inputs, self.rpn_window, truth_boxes, truth_labels)
 
-            self.rpn_proposals, self.rcnn_labels, self.rcnn_assigns, self.rcnn_targets  = \
-                make_rcnn_target(cfg, mode, inputs, self.rpn_proposals, truth_boxes, truth_labels )
+            self.rpn_proposals, self.rcnn_labels, self.rcnn_assigns, self.rcnn_targets = \
+                make_rcnn_target(cfg, mode, inputs, self.rpn_proposals, truth_boxes, truth_labels)
 
-
-        #rcnn proposals ------------------------------------------------
+        # rcnn proposals ------------------------------------------------
         self.rcnn_proposals = self.rpn_proposals
         if len(self.rpn_proposals) > 0:
             rcnn_crops = self.rcnn_crop(features, self.rpn_proposals)
             self.rcnn_logits, self.rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
             self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals,  self.rcnn_logits, self.rcnn_deltas)
 
-
         if mode in ['train', 'valid']:
             self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances,   = \
                 make_mask_target(cfg, mode, inputs,  self.rcnn_proposals, truth_boxes, truth_labels, truth_instances)
 
-
-        #segmentation  -------------------------------------------
+        # segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
         self.masks = make_empty_masks(cfg, mode, inputs)
 
@@ -439,7 +434,7 @@ class MaskNet(nn.Module):
         return self.total_loss
 
     # <todo> freeze bn for imagenet pretrain
-    def set_mode(self, mode ):
+    def set_mode(self, mode):
         self.mode = mode
         if mode in ['eval', 'valid', 'test']:
             self.eval()
@@ -487,7 +482,7 @@ def run_check_feature_net():
 
 def run_check_multi_rpn_head():
 
-    batch_size = 8
+    batch_size = 4
     in_channels = 128
     H,W = 256, 256
     num_scales = 4
@@ -638,8 +633,8 @@ if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
 #    run_check_feature_net()
-    # run_check_multi_rpn_head()
-    run_check_crop_head()
+    run_check_multi_rpn_head()
+#    run_check_crop_head()
     # run_check_rcnn_head()
     # run_check_mask_head()
 

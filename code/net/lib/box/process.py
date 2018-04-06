@@ -178,9 +178,6 @@ def box_overlap(boxes, gt_boxes):
     return overlaps
 
 
-
-
-
 ## python  ##############################################################################
 def clip_boxes(boxes, width, height):
     boxes[:, 0] = np.clip(boxes[:, 0], 0, width  - 1)

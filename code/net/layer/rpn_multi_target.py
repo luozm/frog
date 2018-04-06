@@ -1,21 +1,19 @@
-from common import *
-from utility.draw import *
+import os
 import cv2
+import torch
+import numpy as np
+from torch.autograd import Variable
+
+from utility.draw import image_show
 from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_overlap
-import itertools
-
-
-if __name__ == '__main__':
-    from rpn_multi_nms     import *
-
-else:
-    from .rpn_multi_nms    import *
+from net.layer.rpn_multi_nms import rpn_decode, rpn_encode
 
 
 ## debug and draw #############################################################
 def normalize(data):
     data = (data-data.min())/(data.max()-data.min())
     return data
+
 
 def unflat_to_c3(data, num_bases, scales, H, W):
     dtype =data.dtype
@@ -69,6 +67,7 @@ def unflat_to_c3(data, num_bases, scales, H, W):
 
     return datas
 
+
 def draw_rpn_target_truth_box(image, truth_box, truth_label):
     image = image.copy()
     for b,l in zip(truth_box, truth_label):
@@ -80,6 +79,7 @@ def draw_rpn_target_truth_box(image, truth_box, truth_label):
             #draw_dotted_rect(image,(x0,y0), (x1,y1), (0,0,255), )
 
     return image
+
 
 def draw_rpn_target_label(cfg, image, window, label, label_assign, label_weight):
 
@@ -94,8 +94,6 @@ def draw_rpn_target_label(cfg, image, window, label, label_assign, label_weight)
     labels        = unflat_to_c3(label       , num_bases, scales, H, W)
     label_assigns = unflat_to_c3(label_assign, num_bases, scales, H, W)
     label_weights = unflat_to_c3(label_weight, num_bases, scales, H, W)
-
-
 
     all = []
     for l in range(num_scales):
@@ -114,14 +112,15 @@ def draw_rpn_target_label(cfg, image, window, label, label_assign, label_weight)
     all = np.hstack(all)
     return all
 
+
 def draw_rpn_target_target(cfg, image, window, target, target_weight):
 
     H,W = image.shape[:2]
     scales = cfg.rpn_scales
     num_scales = len(cfg.rpn_scales)
-    num_bases  = [len(b) for b in cfg.rpn_base_apsect_ratios]
+    num_bases = [len(b) for b in cfg.rpn_base_apsect_ratios]
 
-    target_weight  = (normalize(target_weight)*255).astype(np.uint8)
+    target_weight = (normalize(target_weight)*255).astype(np.uint8)
     target_weights = unflat_to_c3(target_weight, num_bases, scales, H, W)
 
     all=[]
@@ -156,167 +155,221 @@ def draw_rpn_target_target1(cfg, image, window, target, target_weight, is_before
             #cv2.circle(image,((w[0]+w[2])//2, (w[1]+w[3])//2),2, (0,0,255), -1, cv2.LINE_AA)
 
         if is_after:
-            cv2.rectangle(image,(b[0], b[1]), (b[2], b[3]), (0,255,255), 1)
+            cv2.rectangle(image, (b[0], b[1]), (b[2], b[3]), (0,255,255), 1)
 
     return image
 
 
-
-
-## target #############################################################
+# target #############################################################
 
 # cpu version
-def make_one_rpn_target(cfg, mode, input, window, truth_box, truth_label):
+def make_one_rpn_target(cfg, input, window, truth_box, truth_label, debug=False):
+    """Given the anchors and GT boxes, compute overlaps and identify positive
+    anchors and deltas to refine them to match their corresponding GT boxes.
+    Args:
+        cfg: configuration
+        input: input image
+        window: [num_anchors, (x0, y0, x1, y1)]
+        truth_box: [num_gt_boxes, (x0, y0, x1, y1)]
+        truth_label: [num_gt_boxes] Integer class IDs.
+        debug: debugging mode
+
+    Returns:
+        rpn_match: [N] (int32) matches between anchors and GT boxes.
+               1 = positive anchor, -1 = negative anchor, 0 = neutral
+        rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas.
+    """
 
     num_window = len(window)
-    label         = np.zeros((num_window, ), np.float32)
-    label_assign  = np.zeros((num_window, ), np.int32)
-    label_weight  = np.ones ((num_window, ), np.float32)
-    target        = np.zeros((num_window,4), np.float32)
+    label = np.zeros((num_window,), np.float32)
+    label_assign = np.zeros((num_window, ), np.int32)
+    label_weight = np.ones((num_window, ), np.float32)
+    target = np.zeros((num_window, 4), np.float32)
     target_weight = np.zeros((num_window, ), np.float32)
 
+    # label = np.zeros((cfg.num_train_rpn_anchors,), np.float32)
+    # label_weight = np.ones((cfg.num_train_rpn_anchors,), np.float32)
+    # # RPN Match: 1 = positive anchor, -1 = negative anchor, 0 = neutral
+    # rpn_match = np.zeros((num_window, ), np.int32)
 
     num_truth_box = len(truth_box)
-    if num_truth_box != 0:
+    if num_truth_box == 0:
+        pass
+        # label_assign = np.zeros((cfg.num_train_rpn_anchors, ), np.int32)
+        # bg_index = np.random.choice(range(num_window), cfg.num_train_rpn_anchors, replace=False)
+        # rpn_match[bg_index] = -1
+    else:
 
-        _,height,width = input.size()
+        _, height, width = input.size()
 
-        # "SSD: Single Shot MultiBox Detector" - Wei Liu, Dragomir Anguelov, Dumitru Erhan, Christian Szegedy
-        #   -- see Table.3
-        #
-        # allowed_border=0
-        # invalid_index = (
-        #     (window[:,0] < allowed_border)    | \
-        #     (window[:,1] < allowed_border)    | \
-        #     (window[:,2] > width-1  - allowed_border) | \
-        #     (window[:,3] > height-1 - allowed_border))
-        # label_weight [invalid_index]=0
-        # target_weight[invalid_index]=0
+        # ----------------------------------------------------------------
+        # classification for bg & fg
+        # ----------------------------------------------------------------
 
+        # 1. Set negative anchors first. They get overwritten below if a GT box is
+        # matched to them. Skip boxes in crowd areas.
+        overlap = cython_box_overlap(window, truth_box)
+        argmax_overlap = np.argmax(overlap, 1)
+        max_overlap = overlap[np.arange(num_window), argmax_overlap]
 
-        # classification ---------------------------------------
-
-        # bg
-        overlap        = cython_box_overlap(window, truth_box)
-        argmax_overlap = np.argmax(overlap,1)
-        max_overlap    = overlap[np.arange(num_window),argmax_overlap]
-
-        bg_index = max_overlap <  cfg.rpn_train_bg_thresh_high
+        bg_index = np.where(max_overlap < cfg.rpn_train_bg_thresh_high)[0]
         label[bg_index] = 0
         label_weight[bg_index] = 1
 
-        # fg
-        fg_index = max_overlap >=  cfg.rpn_train_fg_thresh_low
-        label[fg_index] = 1  #<todo> extend to multi-class ... need to modify regression below too
-        label_weight[fg_index] = 1
+        # 2. Set anchors with high overlap as positive.
+        fg_index_high = np.where(max_overlap >= cfg.rpn_train_fg_thresh_low)[0]
+        label[fg_index_high] = 1  # <todo> extend to multi-class ... need to modify regression below too
+        label_weight[fg_index_high] = 1
         label_assign[...] = argmax_overlap
 
+        # 3. Set an anchor for each GT box (regardless of IoU value).
+        # for each truth, window with highest overlap, include multiple maximums
+        argmax_overlap = np.argmax(overlap, 0)
+        max_overlap = overlap[argmax_overlap, np.arange(num_truth_box)]
+        argmax_overlap, a = np.where(overlap == max_overlap)
 
-        # fg: for each truth, window with highest overlap, include multiple maxs
-        argmax_overlap = np.argmax(overlap,0)
-        max_overlap    = overlap[argmax_overlap,np.arange(num_truth_box)]
-        argmax_overlap, a = np.where(overlap==max_overlap)
+        fg_index_gt = argmax_overlap
+        bg_index = np.setdiff1d(bg_index, fg_index_gt)
+        label[fg_index_gt] = 1
+        label_weight[fg_index_gt] = 1
+        label_assign[fg_index_gt] = a
 
-        fg_index = argmax_overlap
-        label       [fg_index] = 1
-        label_weight[fg_index] = 1
-        label_assign[fg_index] = a
+        # don't care------------
+        invalid_truth_label = np.where(truth_label < 0)[0]
+        invalid_index = np.isin(label_assign, invalid_truth_label) & (label != 0)
+        label_weight[invalid_index] = 0
+        target_weight[invalid_index] = 0
 
+#         # ----------------------------------------------------------------
+#         # random sample fg & bg
+#         # ----------------------------------------------------------------
+#
+# #        bg_index = np.where((label_weight != 0) & (label == 0))[0]
+#
+        fg_index = np.union1d(fg_index_gt, fg_index_high)
+        num_fg = len(fg_index)
+        num_bg = len(bg_index)
+#
+#         # sample fg, no more than 50% fg
+#         if num_fg > cfg.num_train_rpn_anchors/2:
+#             num_fg = int(cfg.num_train_rpn_anchors/2)
+#             fg_index = sorted(np.random.choice(fg_index, num_fg, replace=False))
+#
+#         rpn_match[fg_index] = 1
+#
+#         # sample bg
+#         num_bg = cfg.num_train_rpn_anchors-num_fg
+#         bg_index = sorted(np.random.choice(bg_index, num_bg, replace=False))
+#         rpn_match[bg_index] = -1
 
         # regression ---------------------------------------
-
-        fg_index         = np.where(label!=0)
-        target_window    = window[fg_index]
+        target_window = window[fg_index]
         target_truth_box = truth_box[label_assign[fg_index]]
+
+#        target = rpn_encode(target_window, target_truth_box)
         target[fg_index] = rpn_encode(target_window, target_truth_box)
         target_weight[fg_index] = 1
 
+#        label[:num_fg] = 1
+#        target_weight = np.ones((num_fg, ), np.float32)
+#        label_assign = label_assign[np.concatenate((fg_index, bg_index))]
 
-        #don't care------------
-        invalid_truth_label = np.where(truth_label<0)[0]
-        invalid_index = np.isin(label_assign, invalid_truth_label)  & (label!=0)
-        label_weight [invalid_index]=0
-        target_weight[invalid_index]=0
+        # ----------------------------------------------------------------
+        # weight balancing
+        # ----------------------------------------------------------------
 
+        # class balancing (use only if don't sample anchors)
+        label_weight[fg_index] = 1
+        label_weight[bg_index] = num_fg/num_bg
+#        label_weight[:num_fg] = 1
+#        label_weight[num_fg:] = num_fg/num_bg
 
+        # # <TODO> scale balancing
+        # num_scales = len(cfg.rpn_scales)
+        # num_bases = [len(b) for b in cfg.rpn_base_apsect_ratios]
+        # start = 0
+        # for l in range(num_scales):
+        #     h, w = int(height//2**l), int(width//2**l)
+        #     end = start + h*w*num_bases[l]
+        #     ## label_weight[start:end] *= (2**l)**2
+        #     start = end
+        #
 
-        #class balancing
-        if 1:
-            fg_index = np.where( (label_weight!=0) & (label!=0) )[0]
-            bg_index = np.where( (label_weight!=0) & (label==0) )[0]
-
-            num_fg = len(fg_index)
-            num_bg = len(bg_index)
-            label_weight[fg_index] = 1
-            label_weight[bg_index] = num_fg/num_bg
-
-            #scale balancing
-            num_scales = len(cfg.rpn_scales)
-            num_bases  = [len(b) for b in cfg.rpn_base_apsect_ratios]
-            start = 0
-            for l in range(num_scales):
-                h,w = int(height//2**l),int(width//2**l)
-                end = start+ h*w*num_bases[l]
-                ## label_weight[start:end] *= (2**l)**2
-                start=end
-
-        #task balancing
+        # task balancing
         target_weight[fg_index] = label_weight[fg_index]
 
-
-        if 0:  #<debug> ---------------------------------------
+        # -----------------------------------
+        # debugging
+        # -----------------------------------
+        if debug:
             image = input.data.cpu().numpy()*255
-            image = image.transpose((1,2,0)).astype(np.uint8).copy()
+            image = image.transpose((1, 2, 0)).astype(np.uint8).copy()
 
             all1 = draw_rpn_target_truth_box(image, truth_box, truth_label)
-            all2 = draw_rpn_target_label (cfg, image, window, label, label_assign, label_weight)
+            all2 = draw_rpn_target_label(cfg, image, window, label, label_assign, label_weight)
             all3 = draw_rpn_target_target(cfg, image, window, target, target_weight)
             all4 = draw_rpn_target_target1(cfg, image, window, target, target_weight)
 
-            image_show('all1',all1,1)
-            image_show('all2',all2,1)
-            image_show('all3',all3,1)
-            image_show('all4',all4,1)
+            image_show('all1', all1, 1)
+            image_show('all2', all2, 1)
+            image_show('all3', all3, 1)
+            image_show('all4', all4, 1)
             cv2.waitKey(0)
 
     # save
-    label          = Variable(torch.from_numpy(label)).cuda()
-    label_assign   = Variable(torch.from_numpy(label_assign)).cuda()
-    label_weight   = Variable(torch.from_numpy(label_weight)).cuda()
-    target         = Variable(torch.from_numpy(target)).cuda()
-    target_weight  = Variable(torch.from_numpy(target_weight)).cuda()
-    return  label, label_assign, label_weight, target, target_weight
+    label = Variable(torch.from_numpy(label)).cuda()
+    label_assign = Variable(torch.from_numpy(label_assign)).cuda()
+    label_weight = Variable(torch.from_numpy(label_weight)).cuda()
+    target = Variable(torch.from_numpy(target)).cuda()
+    target_weight = Variable(torch.from_numpy(target_weight)).cuda()
+    return label, label_assign, label_weight, target, target_weight
+
+    # if num_truth_box == 0:
+    #     target = None
+    #     target_weight = None
+    # else:
+    #     target = Variable(torch.from_numpy(target)).cuda()
+    #     target_weight = Variable(torch.from_numpy(target_weight)).cuda()
+    # if sum(rpn_match!=0) != cfg.num_train_rpn_anchors:
+    #     raise ValueError
+    # rpn_match = Variable(torch.from_numpy(rpn_match)).cuda()
+    # return label, label_assign, label_weight, target, target_weight, rpn_match
 
 
-def make_rpn_target(cfg, mode, inputs, window, truth_boxes, truth_labels):
+def make_rpn_target(cfg, inputs, window, truth_boxes, truth_labels):
 
     rpn_labels = []
     rpn_label_assigns = []
     rpn_label_weights = []
     rpn_targets = []
     rpn_targets_weights = []
+#    rpn_matchs = []
 
     batch_size = len(truth_boxes)
     for b in range(batch_size):
         input = inputs[b]
-        truth_box   = truth_boxes[b]
+        truth_box = truth_boxes[b]
         truth_label = truth_labels[b]
 
         rpn_label, rpn_label_assign, rpn_label_weight, rpn_target, rpn_targets_weight = \
-            make_one_rpn_target(cfg, mode, input, window, truth_box, truth_label)
+            make_one_rpn_target(cfg, input, window, truth_box, truth_label)
 
-        rpn_labels.append(rpn_label.view(1,-1))
-        rpn_label_assigns.append(rpn_label_assign.view(1,-1))
-        rpn_label_weights.append(rpn_label_weight.view(1,-1))
-        rpn_targets.append(rpn_target.view(1,-1,4))
-        rpn_targets_weights.append(rpn_targets_weight.view(1,-1))
+        rpn_labels.append(rpn_label.view(1, -1))
+        rpn_label_assigns.append(rpn_label_assign.view(1, -1))
+        rpn_label_weights.append(rpn_label_weight.view(1, -1))
+        rpn_targets.append(rpn_target.view(1, -1, 4))
+        rpn_targets_weights.append(rpn_targets_weight.view(1, -1))
+        # if rpn_target is not None:
+        #     rpn_targets.append(rpn_target)
+        #     rpn_targets_weights.append(rpn_targets_weight)
+        # rpn_matchs.append(rpn_match.view(1, -1))
 
-
-    rpn_labels          = torch.cat(rpn_labels, 0)
-    rpn_label_assigns   = torch.cat(rpn_label_assigns, 0)
-    rpn_label_weights   = torch.cat(rpn_label_weights, 0)
-    rpn_targets         = torch.cat(rpn_targets, 0)
+    rpn_labels = torch.cat(rpn_labels, 0)
+    rpn_label_assigns = torch.cat(rpn_label_assigns, 0)
+    rpn_label_weights = torch.cat(rpn_label_weights, 0)
+    rpn_targets = torch.cat(rpn_targets, 0)
     rpn_targets_weights = torch.cat(rpn_targets_weights, 0)
+    # rpn_matchs = torch.cat(rpn_matchs, 0)
 
     return rpn_labels, rpn_label_assigns, rpn_label_weights, rpn_targets, rpn_targets_weights
 
@@ -398,13 +451,6 @@ def make_rpn_target(cfg, mode, inputs, window, truth_boxes, truth_labels):
 #
 
 
-
-
-
-
-
-
-#####################################################################################
 if __name__ == '__main__':
     print( '%s: calling main function ... ' % os.path.basename(__file__))
 
