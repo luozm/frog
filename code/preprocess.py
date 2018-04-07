@@ -147,6 +147,16 @@ def split_train_val(split_file, val_percentage=0.1):
     write_list_to_file(val_names, SPLIT_DIR + 'train1_val_%d' % num_val)
 
 
+def remove_foler_solit(split_file):
+    ids = read_list_from_file(SPLIT_DIR + split_file, comment='#')
+    img_list = []
+    for idx in ids:
+        img_id = idx.split('/')[1]
+        img_list.append(img_id)
+
+    write_list_to_file(img_list, SPLIT_DIR + split_file + '_nofolder')
+
+
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
@@ -168,14 +178,14 @@ if __name__ == '__main__':
     #     split_file='train1_all_670',
     #     img_folder='stage1_train')
 
-    run_classify_norm_imgs(split_file='train1_fixed_all_664',
-                           img_folder='stage1_train_fixed',
-                           out_folder='train1_fixed_norm',
-                           out_split_prefix_list=[
-                               'train1_fixed_gray_black',
-                               'train1_fixed_purple',
-                               'train1_fixed_gray_white'],
-                           write_split=True)
+    # run_classify_norm_imgs(split_file='train1_fixed_all_664',
+    #                        img_folder='stage1_train_fixed',
+    #                        out_folder='train1_fixed_norm',
+    #                        out_split_prefix_list=[
+    #                            'train1_fixed_gray_black',
+    #                            'train1_fixed_purple',
+    #                            'train1_fixed_gray_white'],
+    #                        write_split=True)
 
     # run_classify_norm_imgs(split_file='test1_all_65',
     #                        img_folder='stage1_test',
@@ -186,6 +196,9 @@ if __name__ == '__main__':
     #                            'test1_gray_white'],
     #                        write_split=True)
 
-    split_train_val('train1_fixed_all_664')
+    # split_train_val('train1_fixed_all_664')
+
+    remove_foler_solit('train1_ids_gray2_500')
+    remove_foler_solit('valid1_ids_gray2_43')
 
     print('sucess!')

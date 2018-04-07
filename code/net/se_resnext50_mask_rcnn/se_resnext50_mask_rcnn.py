@@ -389,7 +389,7 @@ class MaskNet(nn.Module):
 
         if mode in ['train', 'valid']:
             self.rpn_labels, self.rpn_label_assigns, self.rpn_label_weights, self.rpn_targets, self.rpn_target_weights = \
-                make_rpn_target(cfg, mode, inputs, self.rpn_window, truth_boxes, truth_labels)
+                make_rpn_target(cfg, inputs, self.rpn_window, truth_boxes, truth_labels)
 
             self.rpn_proposals, self.rcnn_labels, self.rcnn_assigns, self.rcnn_targets = \
                 make_rcnn_target(cfg, mode, inputs, self.rpn_proposals, truth_boxes, truth_labels)

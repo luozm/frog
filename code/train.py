@@ -95,11 +95,11 @@ def valid_augment(image, multi_mask, meta, index):
     :return:
     """
     image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
-    image = normalize_transform(image)
-    image = torch.from_numpy(image.transpose((2, 0, 1))).float()#.div(255)
+    image_norm = normalize_transform(image)
+    image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
 
-    return image, box, label, instance, meta, index
+    return image_norm, image, box, label, instance, meta, index
 
 
 def train_collate(batch):
@@ -110,13 +110,14 @@ def train_collate(batch):
     """
     batch_size = len(batch)
     inputs = torch.stack([batch[b][0]for b in range(batch_size)], 0)
-    boxes = [batch[b][1]for b in range(batch_size)]
-    labels = [batch[b][2]for b in range(batch_size)]
-    instances = [batch[b][3]for b in range(batch_size)]
-    metas = [batch[b][4]for b in range(batch_size)]
-    indices = [batch[b][5]for b in range(batch_size)]
+    images = [batch[b][1] for b in range(batch_size)]
+    boxes = [batch[b][2]for b in range(batch_size)]
+    labels = [batch[b][3]for b in range(batch_size)]
+    instances = [batch[b][4]for b in range(batch_size)]
+    metas = [batch[b][5]for b in range(batch_size)]
+    indices = [batch[b][6]for b in range(batch_size)]
 
-    return [inputs, boxes, labels, instances, metas, indices]
+    return [inputs, images, boxes, labels, instances, metas, indices]
 
 
 def evaluate(net, test_loader):
@@ -130,7 +131,7 @@ def evaluate(net, test_loader):
     test_num = 0
     test_loss = np.zeros(6, np.float32)
     test_acc = 0
-    for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, indices) in enumerate(test_loader, 0):
+    for i, (inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices) in enumerate(test_loader, 0):
 
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
@@ -205,7 +206,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     iter_accum = 1
     batch_size = 4
 
-    num_iters = 20000
+    num_iters = 40000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 150
@@ -213,7 +214,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 + list(range(0, num_iters, 1500))#1*1000
 
     # update LR by step
-    LR = StepLR([(0, 0.01),  (15000, 0.001), (30000, 0.0001),  (40000, 0.00001)])
+    LR = None
+#    LR = StepLR([(0, 0.01),  (15000, 0.001), (30000, 0.0001),  (40000, 0.00001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
@@ -524,10 +526,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_train_603', val_split='train1_val_67',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-norm-01',
-#              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train603-norm-01/checkpoint/20099_model.pth',
-              show_train_img=True)
+    run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01',
+              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/00015000_model.pth',
+              show_train_img=False)
 
     print('\nsucess!')
 
