@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import RandomSampler
+from scipy.ndimage.morphology import distance_transform_edt
 
 from common import IMAGE_DIR, SPLIT_DIR
 from utility.file import read_list_from_file
@@ -219,6 +220,13 @@ def instance_to_multi_mask(instance):
     return multi_mask
 
 
+def multi_mask_to_depth_map(multi_mask):
+    semantic_map = np.zeros(multi_mask.shape, np.int32)
+    semantic_map[multi_mask > 0] = 1
+    depth_map = distance_transform_edt(semantic_map)
+
+    return depth_map
+
 ##------------------------------------------------------
 # def instance_to_ellipse(instance):
 #  contour = thresh & thresh_to_contour(thresh, radius=1)
@@ -315,12 +323,12 @@ def run_check_dataset_reader():
         print('meta : ', meta)
 
         contour_overlay = multi_mask_to_contour_overlay(multi_mask,image,color=[0,0,255])
-        color_overlay   =   multi_mask_to_color_overlay(multi_mask)
-        image_show('image',np.hstack([image,color_overlay,contour_overlay]))
+        color_overlay = multi_mask_to_color_overlay(multi_mask)
+        image_show('image', np.hstack([image,color_overlay,contour_overlay]))
 
-        num_masks  = len(instance)
+        num_masks = len(instance)
         for i in range(num_masks):
-            x0,y0,x1,y1 = box[i]
+            x0, y0, x1, y1 = box[i]
             print('label[i], box[i] : ', label[i], box[i])
 
             instance1 = cv2.cvtColor((instance[i]*255).astype(np.uint8),cv2.COLOR_GRAY2BGR)
@@ -339,6 +347,14 @@ def run_check_dataset_reader():
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_check_dataset_reader()
+#    run_check_dataset_reader()
+    from train import train_augment
+
+    dataset = ScienceDataset('train1_train_603', img_folder='train1_norm', mask_folder='stage1_train', mode='train', transform=train_augment)
+
+    for inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices in dataset:
+        print()
+#        multi_mask_to_depth_map(mask)
+
 
     print('sucess!')

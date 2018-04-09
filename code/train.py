@@ -204,18 +204,18 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     # ---------------------------------------------------------------------------
 
     iter_accum = 1
-    batch_size = 4
+    batch_size = 3
 
-    num_iters = 40000
+    num_iters = 100000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 150
     iter_save = [0, num_iters-1]\
-                + list(range(0, num_iters, 1500))#1*1000
+                + list(range(0, num_iters, 3000))#1*1000
 
     # update LR by step
-    LR = None
-#    LR = StepLR([(0, 0.01),  (15000, 0.001), (30000, 0.0001),  (40000, 0.00001)])
+#    LR = None
+    LR = StepLR([(0, 0.01),  (55000, 0.001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
@@ -526,10 +526,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01',
-              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/00015000_model.pth',
-              show_train_img=False)
+    run_train(train_split='train1_purple_108', val_split='train1_purple_108',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-purple108-norm-01',
+              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+              show_train_img=True)
 
     print('\nsucess!')
 

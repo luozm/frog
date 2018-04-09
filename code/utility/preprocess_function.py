@@ -61,3 +61,4 @@ def normalize_img(img):
     # convert to 3 channels
     img_trans = gray2rgb(img_trans)
     return img_trans
+

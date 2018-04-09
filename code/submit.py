@@ -72,8 +72,8 @@ def revert(net, images):
 # -----------------------------------------------------------------------------------
 def submit_augment(image, index):
     pad_image = pad_to_factor(image, factor=16)
-    image = normalize_transform(pad_image)
-    input = torch.from_numpy(image.transpose((2, 0, 1))).float()#.div(255)
+    image_norm = normalize_transform(pad_image)
+    input = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     return input, image, index
 
 
@@ -323,13 +323,13 @@ if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
     run_submit(
-        out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train603-norm-01/',
-        checkpoint='00003500_model.pth')
+        out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/',
+        checkpoint='70124_model.pth')
 
     run_npy_to_sumbit_csv(
         image_dir=IMAGE_DIR + 'stage1_test/images',
-        submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train603-norm-01/submit/',
-        csv_file='submission-senet-train607-norm-01.csv'
+        submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/submit/',
+        csv_file='submission-senet-train500-norm-01.csv'
     )
     # run_npy_to_sumbit_csv(
     #     image_dir=IMAGE_DIR + 'stage1_test/images',
