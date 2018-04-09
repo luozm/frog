@@ -1,11 +1,12 @@
 import os
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
 
 
 def weighted_binary_cross_entropy_with_logits(logits, labels, weights):
 
-    loss = logits.clamp(min=0) - logits*labels + torch.log(1 + torch.exp(-logits.abs())) 
+    loss = logits.clamp(min=0) - logits*labels + torch.log(1 + torch.exp(-logits.abs()))
     loss = (weights*loss).sum()/(weights.sum()+1e-12)
 
     return loss
@@ -17,7 +18,6 @@ def binary_cross_entropy_with_logits(logits, labels):
     loss = loss.sum()/len(loss)
 
     return loss
-
 
 def mask_loss(logits, labels, instances):
 
@@ -34,7 +34,7 @@ def mask_loss(logits, labels, instances):
 
     logits_flat = logits_flat[select].view(-1)
     labels_flat = instances.view(-1)
- 
+
     loss = binary_cross_entropy_with_logits(logits_flat, labels_flat)
     return loss
 
