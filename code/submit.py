@@ -128,7 +128,8 @@ def run_submit(out_dir, checkpoint):
         #'train1_ids_gray_only1_500', mode='test',
         #'valid1_ids_gray_only1_43', mode='test',
         #'debug1_ids_gray_only_10', mode='test',
-        'test1_all_65',
+        'test1_purple_12',
+#        'test1_all_65',
         img_folder='test1_norm',
         mode='test',
         transform=submit_augment)
@@ -217,8 +218,8 @@ def run_submit(out_dir, checkpoint):
 
     assert(test_num == len(test_loader.sampler))
 
-    log.write('initial_checkpoint  = %s\n'%(initial_checkpoint))
-    log.write('test_num  = %d\n'%(test_num))
+    log.write('initial_checkpoint  = %s\n' % initial_checkpoint)
+    log.write('test_num  = %d\n' % test_num)
     log.write('\n')
 
 
@@ -322,15 +323,19 @@ def run_npy_to_sumbit_csv(image_dir, submit_dir, csv_file):
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit(
-        out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/',
-        checkpoint='70124_model.pth')
-
+    # run_submit(
+    #     out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/',
+    #     checkpoint='70124_model.pth')
     run_npy_to_sumbit_csv(
         image_dir=IMAGE_DIR + 'stage1_test/images',
-        submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/submit/',
-        csv_file='submission-senet-train500-norm-01.csv'
+        submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-purple108-norm-01/submit/',
+        csv_file='submission-senet-purple12-norm-01.csv'
     )
+    # run_npy_to_sumbit_csv(
+    #     image_dir=IMAGE_DIR + 'stage1_test/images',
+    #     submit_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-norm-01/submit/',
+    #     csv_file='submission-senet-train500-purple12-norm-04.csv'
+    # )
     # run_npy_to_sumbit_csv(
     #     image_dir=IMAGE_DIR + 'stage1_test/images',
     #     submit_dir=RESULTS_DIR + 'mask-rcnn-50-gray500-02/submit/',

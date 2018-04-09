@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
+
 def depth_loss(logits, labels, instances):
 
     batch_size, num_classes = logits.size(0), logits.size(1)

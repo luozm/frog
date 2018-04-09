@@ -19,6 +19,7 @@ def binary_cross_entropy_with_logits(logits, labels):
 
     return loss
 
+
 def mask_loss(logits, labels, instances):
 
     batch_size, num_classes = logits.size(0), logits.size(1)

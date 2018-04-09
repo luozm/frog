@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 
@@ -13,9 +14,6 @@ def make_empty_masks(cfg, mode, inputs):#<todo>
         mask = np.zeros((H, W), np.float32)
         masks.append(mask)
     return masks
-
-
-
 
 
 # def mask_nms( cfg, mode, inputs, proposals, mask_logits):
@@ -67,17 +65,16 @@ def make_empty_masks(cfg, mode, inputs):#<todo>
 #     return masks
 
 
-
-def mask_nms( cfg, mode, inputs, proposals, mask_logits):
+def mask_nms(cfg, mode, inputs, proposals, mask_logits):
     #images = (inputs.data.cpu().numpy().transpose((0,2,3,1))*255).astype(np.uint8)
 
-    overlap_threshold   = cfg.mask_test_nms_overlap_threshold
+    overlap_threshold = cfg.mask_test_nms_overlap_threshold
     pre_score_threshold = cfg.mask_test_nms_pre_score_threshold
-    mask_threshold      = cfg.mask_test_mask_threshold
+    mask_threshold = cfg.mask_test_mask_threshold
 
-    proposals   = proposals.cpu().data.numpy()
+    proposals = proposals.cpu().data.numpy()
     mask_logits = mask_logits.cpu().data.numpy()
-    mask_probs  = np_sigmoid(mask_logits)
+    mask_probs = np_sigmoid(mask_logits)
 
     masks = []
     batch_size,C,H,W = inputs.size()
@@ -92,16 +89,16 @@ def mask_nms( cfg, mode, inputs, proposals, mask_logits):
             for i in index:
                 m = np.zeros((H,W),np.bool)
 
-                x0,y0,x1,y1 = proposals[i,1:5].astype(np.int32)
-                h, w  = y1-y0+1, x1-x0+1
-                label = int(proposals[i,6])
-                crop  = mask_probs[i, label]
-                crop  = cv2.resize(crop, (w,h), interpolation=cv2.INTER_LINEAR)
-                crop  = crop > mask_threshold
-                m[y0:y1+1,x0:x1+1] = crop
+                x0, y0, x1, y1 = proposals[i, 1:5].astype(np.int32)
+                h, w = y1-y0+1, x1-x0+1
+                label = int(proposals[i, 6])
+                crop = mask_probs[i, label]
+                crop = cv2.resize(crop, (w, h), interpolation=cv2.INTER_LINEAR)
+                crop = crop > mask_threshold
+                m[y0:y1+1, x0:x1+1] = crop
 
                 instance.append(m)
-                box.append((x0,y0,x1,y1))
+                box.append((x0, y0, x1, y1))
 
                 #<debug>----------------------------------------------
                 if 0:
@@ -155,15 +152,12 @@ def mask_nms( cfg, mode, inputs, proposals, mask_logits):
             for i,k in enumerate(keep):
                 mask[np.where(instance[k])] = i+1
 
-
         masks.append(mask)
     return masks
 
-##-----------------------------------------------------------------------------  
-#if __name__ == '__main__':
-#    print( '%s: calling main function ... ' % os.path.basename(__file__))
-#
-#
-#
-# 
- 
+
+if __name__ == '__main__':
+    print('%s: calling main function ... ' % os.path.basename(__file__))
+
+
+
