@@ -222,7 +222,7 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
             id = test_dataset.ids[indices[b]]
             name =id.split('/')[-1]
 #            print('%d\t%s\t%0.5f  (%0.5f)'%(i,name,mask_average_precision, box_precision))
-            log.write('%d\t%s\t%0.5f,%0.5f,%0.5f\n'%(i, name, rpn_box_precision, box_precision, mask_average_precision))
+            log.write('%d\t%s\t%0.5f,%0.5f,%0.5f,%0.5f\n'%(i, name, rpn_box_precision, box_precision, mask_precision[0][1], mask_average_precision))
 
             # ----
             contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0,255,0])
