@@ -287,8 +287,8 @@ class CropRoi(nn.Module):
                               - torch.from_numpy(np.array(self.sizes, np.float32)).cuda())
         min_distances, min_index = distances.min(1)
 
-        rois = proposals.detach().data[:, 0:5]
-        rois = Variable(rois)
+#        rois = proposals.detach().data[:, 0:5]
+#        rois = Variable(rois)
 
         crops = []
         indices = []
@@ -296,7 +296,7 @@ class CropRoi(nn.Module):
             index = (min_index == l).nonzero()
 
             if len(index) > 0:
-                crop = self.crops[l](fs[l], rois[index].view(-1, 5))
+                crop = self.crops[l](fs[l], proposals[index].view(-1, 8))
                 crops.append(crop)
                 indices.append(index)
 
@@ -410,7 +410,7 @@ class MaskDepthNet(nn.Module):
 
         if mode in ['train', 'valid']:
             self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances, self.depth_instances, = \
-                make_depth_target(cfg, mode, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_depths)
+                make_depth_target(cfg, mode, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_instances, truth_depths)
 
         # segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
@@ -437,8 +437,10 @@ class MaskDepthNet(nn.Module):
         self.mask_cls_loss  = \
              mask_loss(self.mask_logits, self.mask_labels, self.mask_instances)
 
-        self.depth_loss = depth_loss(self.depth_logits, self.mask_instances)
+        self.depth_loss = depth_loss(self.depth_logits, self.mask_labels, self.depth_instances)
 
+        #print(self.mask_cls_loss)
+        #print(self.depth_loss)
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
                           + self.rcnn_cls_loss + self.rcnn_reg_loss \
                           + self.mask_cls_loss + self.depth_loss

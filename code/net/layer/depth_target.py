@@ -14,13 +14,14 @@ def add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label, score=-1
 
     #proposal i,x0,y0,x1,y1,score, label
     if len(truth_box) != 0:
-        truth = np.zeros((len(truth_box),7),np.float32)
+        truth = np.zeros((len(truth_box),8),np.float32)
         truth[:, 0] = b
         truth[:, 1:5] = truth_box
         truth[:, 5] = score #1  #
         truth[:, 6] = truth_label
+        truth[:, 7] = 0
     else:
-        truth = np.zeros((0, 7), np.float32)
+        truth = np.zeros((0, 8), np.float32)
 
     sampled_proposal = np.vstack([proposal, truth])
     return sampled_proposal
@@ -57,9 +58,9 @@ def crop_instance(instance, box, size, threshold=0.5):
 
 
 # cpu version
-def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_instance, truth_depth_map):
+def make_one_depth_target(cfg, mode, input, proposal, truth_box, truth_label, truth_instance, truth_depth_map):
 
-    sampled_proposal = Variable(torch.FloatTensor(0, 7)).cuda()
+    sampled_proposal = Variable(torch.FloatTensor(0, 8)).cuda()
     sampled_label = Variable(torch.LongTensor(0, 1)).cuda()
     sampled_instance = Variable(torch.FloatTensor(0, 1, 1)).cuda()
     sampled_depth_map = Variable(torch.FloatTensor(0, 1, 1)).cuda()
@@ -136,18 +137,19 @@ def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_in
     return sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_depth_map
 
 
-def make_depth_target(cfg, mode, inputs, proposals, truth_boxes, truth_labels, truth_depth_maps):
+def make_depth_target(cfg, mode, inputs, proposals, truth_boxes, truth_labels, truth_instances, truth_depth_maps):
 
     # <todo> take care of don't care ground truth. Here, we only ignore them  ---
     truth_boxes = copy.deepcopy(truth_boxes)
     truth_labels = copy.deepcopy(truth_labels)
+    truth_instances = copy.deepcopy(truth_instances)
     truth_depth_maps = copy.deepcopy(truth_depth_maps)
     batch_size = len(inputs)
     for b in range(batch_size):
         index = np.where(truth_labels[b] > 0)[0]
         truth_boxes[b] = truth_boxes[b][index]
         truth_labels[b] = truth_labels[b][index]
-        #truth_instances[b] = truth_instances[b]
+        truth_instances[b] = truth_instances[b][index]
     # ----------------------------------------------------------------------------
 
     proposals = proposals.cpu().data.numpy()
@@ -162,17 +164,18 @@ def make_depth_target(cfg, mode, inputs, proposals, truth_boxes, truth_labels, t
         input = inputs[b]
         truth_box = truth_boxes[b]
         truth_label = truth_labels[b]
+        truth_instance = truth_instances[b]
         truth_depth_map = truth_depth_maps[b]
 
         if len(truth_box) != 0:
             if len(proposals) == 0:
-                proposal = np.zeros((0, 7), np.float32)
+                proposal = np.zeros((0, 8), np.float32)
             else:
                 proposal = proposals[proposals[:, 0] == b]
 
             proposal = add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label)
             sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_depth_map = \
-                make_one_depth_target(cfg, mode, input, proposal, truth_box, truth_label, truth_depth_map)
+                make_one_depth_target(cfg, mode, input, proposal, truth_box, truth_label, truth_instance, truth_depth_map)
 
             sampled_proposals.append(sampled_proposal)
             sampled_labels.append(sampled_label)

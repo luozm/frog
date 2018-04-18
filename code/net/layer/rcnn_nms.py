@@ -90,7 +90,7 @@ def rcnn_nms(cfg, mode, inputs, proposals, logits, deltas ):
     #non-max suppression
     detections = []
     for b in range(batch_size):
-        detection = [np.empty((0,7),np.float32),]
+        detection = [np.empty((0, 8), np.float32)]
 
         index = np.where(proposals[:,0]==b)[0]
         if len(index)>0:
@@ -113,11 +113,12 @@ def rcnn_nms(cfg, mode, inputs, proposals, logits, deltas ):
                         p    = p[keep]
                         keep = gpu_nms(np.hstack((box, p)), nms_overlap_threshold)
 
-                        det = np.zeros((num,7),np.float32)
-                        det[:,0  ] = b
-                        det[:,1:5] = np.around(box,0)
-                        det[:,5  ] = p[:,0]
-                        det[:,6  ] = j
+                        det = np.zeros((num, 8), np.float32)
+                        det[:, 0] = b
+                        det[:, 1:5] = np.around(box, 0)
+                        det[:, 5] = p[:, 0]
+                        det[:, 6] = j
+                        det[:, 7] = 0
                         detection.append(det)
 
         detection = np.vstack(detection)

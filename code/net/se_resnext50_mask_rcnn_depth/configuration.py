@@ -65,6 +65,7 @@ class Configuration(object):
         self.mask_test_nms_pre_score_threshold = 0.4  # self.rpn_test_nms_pre_score_threshold
         self.mask_test_nms_overlap_threshold = 0.1
         self.mask_test_mask_threshold = 0.5
+        self.mast_test_mask_min_area = 8
 
     # -------------------------------------------------------------------------------------------------------
     def __repr__(self):

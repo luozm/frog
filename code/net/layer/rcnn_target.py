@@ -1,35 +1,35 @@
 # reference:  https://github.com/rbgirshick/py-faster-rcnn/blob/master/lib/rpn/anchor_target_layer.py
 import copy
+import numpy as np
+import torch
+from torch.autograd import Variable
+
 from net.lib.box.process import is_small_box
 from net.lib.box.overlap.cython_overlap.cython_box_overlap import cython_box_overlap
-
-
-if __name__ == '__main__':
-    from rcnn_nms     import *
-else:
-    from .rcnn_nms    import *
+from net.layer.rcnn_nms import rcnn_encode
 
 
 def add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label, score=-1):
 
     #proposal i,x0,y0,x1,y1,score, label
-    if len(truth_box) !=0:
-        truth = np.zeros((len(truth_box),7),np.float32)
-        truth[:,0  ] = b
-        truth[:,1:5] = truth_box
-        truth[:,5  ] = score #1  #
-        truth[:,6  ] = truth_label
+    if len(truth_box) != 0:
+        truth = np.zeros((len(truth_box), 8), np.float32)
+        truth[:, 0] = b
+        truth[:, 1:5] = truth_box
+        truth[:, 5] = score #1  #
+        truth[:, 6] = truth_label
+        truth[:, 7] = 0
     else:
-        truth = np.zeros((0,7),np.float32)
+        truth = np.zeros((0, 8), np.float32)
 
-    sampled_proposal = np.vstack([proposal,truth])
+    sampled_proposal = np.vstack([proposal, truth])
     return sampled_proposal
 
 
 # gpu version
 ## see https://github.com/ruotianluo/pytorch-faster-rcnn
 def make_one_rcnn_target(cfg, input, proposal, truth_box, truth_label):
-    sampled_proposal = Variable(torch.FloatTensor((0,7))).cuda()
+    sampled_proposal = Variable(torch.FloatTensor((0, 8))).cuda()
     sampled_label = Variable(torch.LongTensor((0,1))).cuda()
     sampled_assign = np.array((0,1),np.int32)
     sampled_target = Variable(torch.FloatTensor((0,4))).cuda()
@@ -120,7 +120,7 @@ def make_one_rcnn_target(cfg, input, proposal, truth_box, truth_label):
     # target
     if num_fg > 0:
         target_truth_box = truth_box[sampled_assign[:num_fg]]
-        target_box = sampled_proposal[:num_fg][:,1:5]
+        target_box = sampled_proposal[:num_fg][:, 1:5]
         sampled_target = rcnn_encode(target_box, target_truth_box)
 
     sampled_target = Variable(torch.from_numpy(sampled_target)).cuda()
@@ -150,15 +150,15 @@ def make_rcnn_target(cfg, mode, inputs, proposals, truth_boxes, truth_labels):
 
     batch_size = len(truth_boxes)
     for b in range(batch_size):
-        input          = inputs[b]
-        truth_box      = truth_boxes[b]
-        truth_label    = truth_labels[b]
+        input = inputs[b]
+        truth_box = truth_boxes[b]
+        truth_label = truth_labels[b]
 
         if len(truth_box) != 0:
             if len(proposals)==0:
-                proposal = np.zeros((0,7),np.float32)
+                proposal = np.zeros((0, 8), np.float32)
             else:
-                proposal = proposals[proposals[:,0]==b]
+                proposal = proposals[proposals[:, 0] == b]
 
             proposal = add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label)
 
@@ -170,10 +170,10 @@ def make_rcnn_target(cfg, mode, inputs, proposals, truth_boxes, truth_labels):
             sampled_assigns.append(sampled_assign)
             sampled_targets.append(sampled_target)
 
-    sampled_proposals = torch.cat(sampled_proposals,0)
-    sampled_labels    = torch.cat(sampled_labels,0)
-    sampled_targets   = torch.cat(sampled_targets,0)
-    sampled_assigns   = np.hstack(sampled_assigns)
+    sampled_proposals = torch.cat(sampled_proposals, 0)
+    sampled_labels = torch.cat(sampled_labels, 0)
+    sampled_targets = torch.cat(sampled_targets, 0)
+    sampled_assigns = np.hstack(sampled_assigns)
 
     return sampled_proposals, sampled_labels, sampled_assigns, sampled_targets
 

@@ -36,6 +36,8 @@ def mask_loss(logits, labels, instances):
     logits_flat = logits_flat[select].view(-1)
     labels_flat = instances.view(-1)
 
+#    print(logits_flat.size())
+#    print(labels_flat.size())
     loss = binary_cross_entropy_with_logits(logits_flat, labels_flat)
     return loss
 

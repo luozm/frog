@@ -6,6 +6,7 @@ from common import RESULTS_DIR, SEED, IDENTIFIER, PROJECT_PATH, np_softmax
 import os
 import cv2
 import time
+import random
 import pickle
 import torch
 import numpy as np
@@ -23,13 +24,15 @@ from utility.draw import image_show
 from dataset.reader import ScienceDataset, multi_mask_to_annotation, mask_to_inner_contour
 from net.learning_rate import get_learning_rate, adjust_learning_rate, StepLR
 from net.se_resnext50_mask_rcnn.configuration import Configuration
-from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
-from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
+from net.se_resnext50_mask_rcnn_new.model import MaskRcnnNet
+from net.draw import draw_multi_proposal_metric, draw_mask_metric
 from dataset.transform import random_shift_scale_rotate_transform2,\
     random_crop_transform2, random_horizontal_flip_transform2,\
     random_vertical_flip_transform2, random_rotate90_transform2, \
     fix_crop_transform2, normalize_transform
 
+from dataset.transform_new import random_transform, random_transform2, do_custom_process1, do_contrast, do_gamma,\
+    do_clahe, do_unsharp, do_speckle_noise, do_flip_transpose2, do_elastic_transform2, do_shift_scale_rotate2
 
 # -------------------------------------------------------------------------------------
 # common settings
@@ -53,36 +56,67 @@ def train_augment(image, multi_mask, meta, index):
     :return: transformed image & mask
     """
 
-    image, multi_mask = random_shift_scale_rotate_transform2(
-        image, multi_mask, shift_limit=[0, 0], scale_limit=[1/2, 2],
-        rotate_limit=[-45, 45], borderMode=cv2.BORDER_REFLECT_101, u=0.5)
+    # illumintaion ------------
+    if 1:
+        type = random.randint(0, 4)
+        if type == 0:
+            image = random_transform(image, u=0.5, func=do_custom_process1, gamma=[0.8,2.5],alpha=[0.7,0.9],beta=[1.0,2.0])
 
-    image, multi_mask = random_horizontal_flip_transform2(image, multi_mask, 0.5)
-    image, multi_mask = random_vertical_flip_transform2(image, multi_mask, 0.5)
-    image, multi_mask = random_rotate90_transform2(image, multi_mask, 0.5)
-    image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
-    image_norm = normalize_transform(image_crop)
-    # if std of image is 0, recrop it
-    while image_norm is None:
-        image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
-        image_norm = normalize_transform(image_crop)
+        elif type == 1:
+            image = random_transform(image, u=0.5, func=do_contrast, alpha=[0.5,2.5])
 
-    # image = Image.fromarray(image)
-    # multi_mask = Image.fromarray(multi_mask)
+        elif type == 2:
+            image = random_transform(image, u=0.5, func=do_gamma, gamma=[1,3])
+
+        elif type == 3:
+            image = random_transform(image, u=0.5, func=do_clahe, clip=[1,3], grid=[8,16])
+
+        else:
+            pass
+
+    # filter/noise ------------
+    if 1:
+        type = random.randint(0, 2)
+        if type == 0:
+            image = random_transform(image, u=0.5, func=do_unsharp, size=[9,19], strength=[0.2,0.4], alpha=[4,6])
+
+        elif type == 1:
+            image = random_transform(image, u=0.5, func=do_speckle_noise, sigma=[0.1,0.5])
+
+        else:
+            pass
+
+    # geometric ------------
+    if 1:
+        image, mask = random_transform2(image, multi_mask, u=0.5, func=do_shift_scale_rotate2, dx=[0,0],dy=[0,0], scale=[1/2,2], angle=[-45,45])
+#        image, mask = random_transform2(image, mask, u=0.5, func=do_elastic_transform2, grid=[8,64], distort=[0,0.5])
+
+        image, mask = random_crop_transform2(image, mask, WIDTH, HEIGHT, u=0.5)
+        image, mask = do_flip_transpose2(image, mask, random.randint(0,8))
+
+    input = torch.from_numpy(image.transpose((2, 0, 1))).float().div(255)
+    box, label, instance = multi_mask_to_annotation(mask)
+
+    return input, box, label, instance, image, mask, index
+
+    # image, multi_mask = random_shift_scale_rotate_transform2(
+    #     image, multi_mask, shift_limit=[0, 0], scale_limit=[1/2, 2],
+    #     rotate_limit=[-45, 45], borderMode=cv2.BORDER_REFLECT_101, u=0.5)
     #
-    # image = ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5)(image)
-
-#    elastic = GaussianDistortion(grid_height=10, grid_width=10, magnitude=8, probability=0.6)
-#    image, multi_mask = elastic.perform_operation([image, multi_mask])
-    # image.show()
-    # multi_mask.show()
-    # image = np.array(image)
-    # multi_mask = np.array(multi_mask)
-
-    image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
-    box, label, instance = multi_mask_to_annotation(multi_mask_crop)
-
-    return image_norm, image_crop, box, label, instance, meta, index
+    # image, multi_mask = random_horizontal_flip_transform2(image, multi_mask, 0.5)
+    # image, multi_mask = random_vertical_flip_transform2(image, multi_mask, 0.5)
+    # image, multi_mask = random_rotate90_transform2(image, multi_mask, 0.5)
+    # image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
+    # image_norm = normalize_transform(image_crop)
+    # # if std of image is 0, recrop it
+    # while image_norm is None:
+    #     image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
+    #     image_norm = normalize_transform(image_crop)
+    #
+    # image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
+    # box, label, instance = multi_mask_to_annotation(multi_mask_crop)
+    #
+    # return image_norm, image_crop, box, label, instance, meta, index
 
 
 def valid_augment(image, multi_mask, meta, index):
@@ -94,12 +128,18 @@ def valid_augment(image, multi_mask, meta, index):
     :param index:
     :return:
     """
-    image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
-    image_norm = normalize_transform(image)
-    image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
-    box, label, instance = multi_mask_to_annotation(multi_mask)
+    # image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
+    # image_norm = normalize_transform(image)
+    # image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
+    # box, label, instance = multi_mask_to_annotation(multi_mask)
+    #
+    # return image_norm, image, box, label, instance, multi_mask, index
 
-    return image_norm, image, box, label, instance, meta, index
+    image, mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
+    input = torch.from_numpy(image.transpose((2, 0, 1))).float().div(255)
+    box, label, instance = multi_mask_to_annotation(mask)
+
+    return input, box, label, instance, image, mask, index
 
 
 def train_collate(batch):
@@ -110,14 +150,14 @@ def train_collate(batch):
     """
     batch_size = len(batch)
     inputs = torch.stack([batch[b][0]for b in range(batch_size)], 0)
-    images = [batch[b][1] for b in range(batch_size)]
-    boxes = [batch[b][2]for b in range(batch_size)]
-    labels = [batch[b][3]for b in range(batch_size)]
-    instances = [batch[b][4]for b in range(batch_size)]
-    metas = [batch[b][5]for b in range(batch_size)]
+    boxes = [batch[b][1]for b in range(batch_size)]
+    labels = [batch[b][2]for b in range(batch_size)]
+    instances = [batch[b][3]for b in range(batch_size)]
+    images = [batch[b][4] for b in range(batch_size)]
+    masks = [batch[b][5]for b in range(batch_size)]
     indices = [batch[b][6]for b in range(batch_size)]
 
-    return [inputs, images, boxes, labels, instances, metas, indices]
+    return [inputs, boxes, labels, instances, images, masks, indices]
 
 
 def evaluate(net, test_loader):
@@ -131,17 +171,17 @@ def evaluate(net, test_loader):
     test_num = 0
     test_loss = np.zeros(6, np.float32)
     test_acc = 0
-    for i, (inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices) in enumerate(test_loader, 0):
+    for i, (inputs, truth_boxes, truth_labels, truth_instances, images, truth_masks, indices) in enumerate(test_loader, 0):
 
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes,  truth_labels, truth_instances )
+            net.forward(inputs, truth_boxes,  truth_labels, truth_instances)
             loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances)
 
         # acc    = dice_loss(masks, labels) #todo
 
         batch_size = len(indices)
-        test_acc  += 0 #batch_size*acc[0][0]
+        test_acc += 0 #batch_size*acc[0][0]
         test_loss += batch_size*np.array((
                            loss.cpu().data.numpy(),
                            net.rpn_cls_loss.cpu().data.numpy(),
@@ -183,7 +223,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     log.write('** net setting **\n')
     cfg = Configuration()
-    net = MaskNet(cfg).cuda()
+    net = MaskRcnnNet(cfg).cuda()
 
     if resume_checkpoint is not None:
         log.write('\tinitial_checkpoint = %s\n' % resume_checkpoint)
@@ -204,7 +244,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     # ---------------------------------------------------------------------------
 
     iter_accum = 1
-    batch_size = 3
+    batch_size = 4
 
     num_iters = 100000
     iter_smooth = 20
@@ -313,7 +353,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
         net.set_mode('train')
         optimizer.zero_grad()
-        for inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices in train_loader:
+        for inputs, truth_boxes, truth_labels, truth_instances, images, truth_masks, indices in train_loader:
             if all(len(b) == 0 for b in truth_boxes):
                 continue
 
@@ -364,7 +404,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             # one iteration update  -------------
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes, truth_labels, truth_instances)
+            net.forward(inputs, truth_boxes, truth_labels, truth_instances)
             loss = net.loss(inputs, truth_boxes, truth_labels, truth_instances)
 
             # accumulated update
@@ -410,7 +450,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
                 net.set_mode('test')
                 with torch.no_grad():
-                    net(inputs, truth_boxes, truth_labels, truth_instances)
+                    net.forward(inputs, truth_boxes, truth_labels, truth_instances)
 
                 batch_size, C, H, W = inputs.size()
 #                images = inputs.data.cpu().numpy()
@@ -430,14 +470,11 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 for b in range(1):
 #                for b in range(batch_size):
 
-                    image = (images[b])#.transpose((1, 2, 0))*255)
-                    image = image.astype(np.uint8)
-                    #image = np.clip(image.astype(np.float32)*2,0,255).astype(np.uint8)  #improve contrast
-
+                    image = images[b]
                     truth_box = truth_boxes[b]
                     truth_label = truth_labels[b]
                     truth_instance = truth_instances[b]
-                    truth_mask = instance_to_multi_mask(truth_instance)
+                    truth_mask = truth_masks[b]
 
                     rpn_logit_flat = rpn_logits_flat[b]
                     rpn_delta_flat = rpn_deltas_flat[b]
@@ -471,9 +508,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     #all3 = draw_multi_rpn_proposal(cfg, image, proposal)
                     #all4 = draw_truth_box(cfg, image, truth_box, truth_label)
 
-                    all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
-                    all6 = draw_multi_proposal_metric(cfg, image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
-                    all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
+                    all5 = draw_multi_proposal_metric(image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
+                    all6 = draw_multi_proposal_metric(image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
+                    all7 = draw_mask_metric(image, mask, truth_mask)
 
                     # image_show('color_overlay',color_overlay,1)
                     # image_show('rpn_prob',all1,1)
@@ -526,15 +563,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_purple_108', val_split='train1_purple_108',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-purple108-norm-01',
-              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+    run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
+              out_dir=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-new',
+              pretrain_file=RESULTS_DIR + 'mask-rcnn-se-resnext50-train500-new/checkpoint/00049000_model.pth',
               show_train_img=True)
 
     print('\nsucess!')
 
-
-
-#  ffmpeg -f image2  -pattern_type glob -r 33 -i "iterations/*.png" -c:v libx264  iterations.mp4
-#
-#

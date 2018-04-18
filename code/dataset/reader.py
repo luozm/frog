@@ -17,7 +17,9 @@ from net.lib.box.process import is_big_box, is_small_box, is_small_box_at_bounda
 
 
 MIN_SIZE = 6
-MAX_SIZE = 128  #np.inf
+MIN_AREA = 5
+MAX_SIZE = np.inf
+BORDER = 0.25
 IGNORE_BOUNDARY = -1
 IGNORE_SMALL = -2
 IGNORE_BIG = -3
@@ -109,15 +111,16 @@ def multi_mask_to_color_overlay(multi_mask, image=None, color=None):
 
 def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255,255,255]):
 
-    height,width = multi_mask.shape[:2]
-    overlay = np.zeros((height,width,3),np.uint8) if image is None else image.copy()
+    height, width = multi_mask.shape[:2]
+    overlay = np.zeros((height, width, 3), np.uint8) if image is None else image.copy()
     num_masks = int(multi_mask.max())
-    if num_masks==0: return overlay
+    if num_masks == 0:
+        return overlay
 
     for i in range(num_masks):
-        mask = multi_mask==i+1
+        mask = multi_mask == i+1
         contour = mask_to_inner_contour(mask)
-        overlay[contour]=color
+        overlay[contour] = color
 
     return overlay
 
@@ -147,16 +150,16 @@ def mask_to_inner_contour(mask):
     return contour
 
 
-def multi_mask_to_annotation(multi_mask):
-    H,W      = multi_mask.shape[:2]
-    box      = []
-    label    = []
+def multi_mask_to_annotation(multi_mask, min_area=MIN_AREA, border=BORDER, min_size=MIN_SIZE, max_size=MAX_SIZE):
+    H,W = multi_mask.shape[:2]
+    box = []
+    label = []
     instance = []
 
     num_masks = multi_mask.max()
     for i in range(num_masks):
         mask = (multi_mask == (i+1))
-        if mask.sum() > 1:
+        if mask.sum() > min_area:
 
             y, x = np.where(mask)
             y0 = y.min()
@@ -166,33 +169,27 @@ def multi_mask_to_annotation(multi_mask):
             w = (x1-x0)+1
             h = (y1-y0)+1
 
-            border = max(2, round(0.2*(w+h)/2))
-
-            x0 = x0-border
-            x1 = x1+border
-            y0 = y0-border
-            y1 = y1+border
+            b = round(border*(w+h)/2)
 
             # clip
-            x0 = max(0,x0)
-            y0 = max(0,y0)
-            x1 = min(W-1,x1)
-            y1 = min(H-1,y1)
+            x0 = max(0,  x0-b)
+            y0 = max(0,  y0-b)
+            x1 = min(W-1,x1+b)
+            y1 = min(H-1,y1+b)
 
             # label
             l = 1 #<todo> support multiclass later ... ?
-            if is_small_box_at_boundary((x0,y0,x1,y1),W,H,MIN_SIZE):
-                l = IGNORE_BOUNDARY
-                continue  #completely ignore!
-            elif is_small_box((x0,y0,x1,y1),MIN_SIZE):
-                l = IGNORE_SMALL
+
+#            if is_small_box_at_boundary((x0,y0,x1,y1),W,H,MIN_SIZE):
+#                l = IGNORE_BOUNDARY
+#                continue  #completely ignore!
+            if is_small_box((x0, y0, x1, y1), min_size):
                 continue
-            elif is_big_box((x0,y0,x1,y1),MAX_SIZE):
-                l = IGNORE_BIG
+            elif is_big_box((x0, y0, x1, y1), max_size):
                 continue
 
             # add --------------------
-            box.append([x0,y0,x1,y1])
+            box.append([x0, y0, x1, y1])
             label.append(l)
             instance.append(mask)
 
@@ -210,14 +207,26 @@ def multi_mask_to_annotation(multi_mask):
 
 def instance_to_multi_mask(instance):
 
-    H,W = instance.shape[1:3]
-    multi_mask = np.zeros((H,W),np.int32)
+    H, W = instance.shape[1:3]
+    multi_mask = np.zeros((H, W), np.int32)
 
     num_masks = len(instance)
     for i in range(num_masks):
-         multi_mask[instance[i]>0] = i+1
+         multi_mask[instance[i] > 0] = i+1
 
     return multi_mask
+
+
+def multi_mask_to_instance(mask):
+    H, W = mask.shape[:2]
+    mask = np.zeros((H, W), np.int32)
+
+    num_instances = mask.max()
+    instance = np.zeros((num_instances, H, W), np.float32)
+    for i in range(num_instances):
+        instance[i] = mask == i+1
+
+    return instance
 
 
 def multi_mask_to_depth_map(multi_mask):

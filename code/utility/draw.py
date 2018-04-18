@@ -21,7 +21,6 @@ def draw_shadow_text(img, text, pt,  fontScale, color, thickness, color1=None, t
     cv2.putText(img, text, pt, font, fontScale, color,  thickness,  cv2.LINE_AA)
 
 
-
 ##http://stackoverflow.com/questions/26690932/opencv-rectangle-with-dotted-or-dashed-lines
 def draw_dotted_line(image, pt1, pt2, color, thickness=1, gap=20):
 

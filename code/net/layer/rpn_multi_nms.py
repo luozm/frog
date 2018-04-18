@@ -118,7 +118,7 @@ def rpn_nms(cfg, mode, inputs, window, logits_flat, deltas_flat):
 
     proposals = []
     for b in range(batch_size):
-        proposal = [np.empty((0, 7), np.float32), ]
+        proposal = [np.empty((0, 8), np.float32), ]
 
         # probabilities
         ps = np_softmax(logits[b])
@@ -140,11 +140,12 @@ def rpn_nms(cfg, mode, inputs, window, logits_flat, deltas_flat):
                 p = p[keep]
                 keep = gpu_nms(np.hstack((box, p)), nms_overlap_threshold)
 
-                prop = np.zeros((len(keep), 7), np.float32)
+                prop = np.zeros((len(keep), 8), np.float32)
                 prop[:, 0] = b
                 prop[:, 1:5] = np.around(box[keep], 0)
                 prop[:, 5] = p[keep, 0]
                 prop[:, 6] = c
+                prop[:, 7] = 0
                 proposal.append(prop)
 
         proposal = np.vstack(proposal)

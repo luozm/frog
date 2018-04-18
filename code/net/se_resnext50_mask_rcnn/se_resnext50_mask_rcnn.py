@@ -281,8 +281,8 @@ class CropRoi(nn.Module):
                               - torch.from_numpy(np.array(self.sizes, np.float32)).cuda())
         min_distances, min_index = distances.min(1)
 
-        rois = proposals.detach().data[:, 0:5]
-        rois = Variable(rois)
+#        rois = proposals.detach().data[:, 0:5]
+#        rois = Variable(rois)
 
         crops = []
         indices = []
@@ -290,14 +290,13 @@ class CropRoi(nn.Module):
             index = (min_index == l).nonzero()
 
             if len(index) > 0:
-                crop = self.crops[l](fs[l], rois[index].view(-1, 5))
+                crop = self.crops[l](fs[l], proposals[index].view(-1, 8))
                 crops.append(crop)
                 indices.append(index)
 
         crops = torch.cat(crops, 0)
         indices = torch.cat(indices, 0).view(-1)
         crops = crops[torch.sort(indices)[1]]
-        #crops = torch.index_select(crops,0,index)
 
         return crops
 
@@ -306,19 +305,19 @@ class RcnnHead(nn.Module):
     def __init__(self, cfg, in_channels):
         super(RcnnHead, self).__init__()
         self.num_classes = cfg.num_classes
-        self.crop_size   = cfg.rcnn_crop_size
+        self.crop_size = cfg.rcnn_crop_size
 
-        self.fc1 = nn.Linear(in_channels*self.crop_size*self.crop_size,1024)
-        self.fc2 = nn.Linear(1024,1024)
-        self.logit = nn.Linear(1024,self.num_classes)
-        self.delta = nn.Linear(1024,self.num_classes*4)
+        self.fc1 = nn.Linear(in_channels*self.crop_size*self.crop_size, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+        self.logit = nn.Linear(1024, self.num_classes)
+        self.delta = nn.Linear(1024, self.num_classes*4)
 
     def forward(self, crops):
 
         x = crops.view(crops.size(0), -1)
         x = F.relu(self.fc1(x), inplace=True)
         x = F.relu(self.fc2(x), inplace=True)
-        x = F.dropout(x,0.5,training=self.training)
+        x = F.dropout(x, 0.5, training=self.training)
         logits = self.logit(x)
         deltas = self.delta(x)
 
@@ -402,7 +401,7 @@ class MaskNet(nn.Module):
             self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals,  self.rcnn_logits, self.rcnn_deltas)
 
         if mode in ['train', 'valid']:
-            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances,   = \
+            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instance_labels,   = \
                 make_mask_target(cfg, mode, inputs,  self.rcnn_proposals, truth_boxes, truth_labels, truth_instances)
 
         # segmentation  -------------------------------------------
@@ -412,7 +411,8 @@ class MaskNet(nn.Module):
         if len(self.rcnn_proposals) > 0:
             mask_crops = self.mask_crop(features, self.detections)
             self.mask_logits = data_parallel(self.mask_head, mask_crops)
-            self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for mask
+            self.masks, self.mask_instances, self.mask_proposals = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for mask
+            self.detections = self.mask_proposals
 
     def loss(self, inputs, truth_boxes, truth_labels, truth_instances):
         cfg  = self.cfg
@@ -425,13 +425,34 @@ class MaskNet(nn.Module):
 
         ## self.mask_cls_loss = Variable(torch.cuda.FloatTensor(1).zero_()).sum()
         self.mask_cls_loss  = \
-             mask_loss( self.mask_logits, self.mask_labels, self.mask_instances )
+             mask_loss(self.mask_logits, self.mask_labels, self.mask_instance_labels)
 
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
                           + self.rcnn_cls_loss + self.rcnn_reg_loss \
                           + self.mask_cls_loss
 
         return self.total_loss
+
+    def forward_mask_only(self, inputs, rcnn_proposals):
+        """Forward mask head only, given rcnn proposals.
+
+        :param inputs:
+        :param rcnn_proposals:
+        :return:
+        """
+        cfg = self.cfg
+        mode = self.mode
+        batch_size = len(inputs)
+        self.rcnn_proposals = rcnn_proposals
+
+        features = data_parallel(self.feature_net, inputs)
+        self.detections = self.rcnn_proposals
+        self.masks = make_empty_masks(cfg, mode, inputs)
+        if len(self.rcnn_proposals)>0:
+              mask_crops = self.mask_crop(features, self.detections)
+              self.mask_logits = data_parallel(self.mask_head, mask_crops)
+              self.masks,  self.mask_instances, self.mask_proposals  = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits)
+              self.detections = self.mask_proposals
 
     # <todo> freeze bn for imagenet pretrain
     def set_mode(self, mode):

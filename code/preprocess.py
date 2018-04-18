@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     # write train & test split file
 #    make_download_split_file(DOWNLOAD_DIR + 'kaggle-dsbowl-2018-dataset-fixes-master/stage1_train', 'train1_fixed_all')
-#    make_download_split_file(DOWNLOAD_DIR + 'stage1_test', 'test1_all')
+#    make_download_split_file(DOWNLOAD_DIR + 'stage2_test', 'test2_all')
 
     # run_make_train_annotation(
     #     split_file='train1_fixed_all_664',
@@ -170,9 +170,9 @@ if __name__ == '__main__':
     #     out_dir=IMAGE_DIR + 'stage1_train_fixed')
 
     # run_make_test_annotation(
-    #     split_file='test1_all_65',
-    #     img_folder='stage1_test',
-    #     out_dir=IMAGE_DIR + 'stage1_test')
+    #     split_file='test2_all_3019',
+    #     img_folder='stage2_test',
+    #     out_dir=IMAGE_DIR + 'stage2_test')
     #
     # train_kmeans(
     #     split_file='train1_all_670',
@@ -187,18 +187,18 @@ if __name__ == '__main__':
     #                            'train1_fixed_gray_white'],
     #                        write_split=True)
 
-    # run_classify_norm_imgs(split_file='test1_all_65',
-    #                        img_folder='stage1_test',
-    #                        out_folder='test1_norm',
-    #                        out_split_prefix_list=[
-    #                            'test1_gray_black',
-    #                            'test1_purple',
-    #                            'test1_gray_white'],
-    #                        write_split=True)
+    run_classify_norm_imgs(split_file='test2_all_3019',
+                           img_folder='stage2_test',
+                           out_folder='test2_norm',
+                           out_split_prefix_list=[
+                               'test1_gray_black',
+                               'test1_purple',
+                               'test1_gray_white'],
+                           write_split=True)
 
     # split_train_val('train1_fixed_all_664')
-
-    remove_foler_solit('train1_ids_gray2_500')
-    remove_foler_solit('valid1_ids_gray2_43')
+    #
+    # remove_foler_solit('train1_ids_gray2_500')
+    # remove_foler_solit('valid1_ids_gray2_43')
 
     print('sucess!')
