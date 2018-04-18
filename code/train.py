@@ -5,6 +5,7 @@ from common import RESULTS_DIR, SEED, IDENTIFIER, PROJECT_PATH, np_softmax
 
 import os
 import cv2
+import math
 import time
 import pickle
 import torch
@@ -28,7 +29,7 @@ from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_ma
 from dataset.transform import random_shift_scale_rotate_transform2,\
     random_crop_transform2, random_horizontal_flip_transform2,\
     random_vertical_flip_transform2, random_rotate90_transform2, \
-    fix_crop_transform2, normalize_transform
+    fix_crop_transform2, normalize_transform, fix_resize_transform2, pad_to_factor
 
 
 # -------------------------------------------------------------------------------------
@@ -94,7 +95,15 @@ def valid_augment(image, multi_mask, meta, index):
     :param index:
     :return:
     """
-    image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
+    # # if image is smaller than HEIGHT*WIDTH, resize image by scale
+    # height, width = image.shape[:2]
+    # min_size = min(height, width)
+    # if min_size < WIDTH:
+    #     scale = WIDTH/min_size
+    #     image, multi_mask = fix_resize_transform2(image, multi_mask, math.ceil(scale*width), math.ceil(scale*height))
+    # image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
+
+    image = pad_to_factor(image, factor=16)
     image_norm = normalize_transform(image)
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
@@ -204,9 +213,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     # ---------------------------------------------------------------------------
 
     iter_accum = 1
-    batch_size = 3
+    batch_size = 4
 
-    num_iters = 100000
+    num_iters = 30000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 150
@@ -215,7 +224,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     # update LR by step
 #    LR = None
-    LR = StepLR([(0, 0.01),  (55000, 0.001)])
+    LR = StepLR([(0, 0.01),  (15000, 0.001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
@@ -239,8 +248,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     train_dataset = ScienceDataset(
         train_split,
-        img_folder='train1_norm',
-        mask_folder='stage1_train',
+        img_folder='stage1_train_fixed',
+        mask_folder='stage1_train_fixed',
         mode='train',
         transform=train_augment)
 
@@ -255,15 +264,15 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     valid_dataset = ScienceDataset(
         val_split,
-        img_folder='train1_norm',
-        mask_folder='stage1_train',
+        img_folder='stage1_test',
+        mask_folder='stage1_test',
         mode='train',
         transform=valid_augment)
 
     valid_loader = DataLoader(
         valid_dataset,
         sampler=SequentialSampler(valid_dataset),
-        batch_size=batch_size,
+        batch_size=1,
         drop_last=False,
         num_workers=4,
         pin_memory=True,
@@ -526,15 +535,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_purple_108', val_split='train1_purple_108',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-purple108-norm-01',
-              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+    run_train(train_split='train1_fixed_all_664', val_split='test1_all_65',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-fixed-train664-without-img-norm-01',
+              pretrain_file=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
               show_train_img=True)
 
     print('\nsucess!')
-
-
-
-#  ffmpeg -f image2  -pattern_type glob -r 33 -i "iterations/*.png" -c:v libx264  iterations.mp4
-#
-#
