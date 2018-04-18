@@ -164,6 +164,8 @@ def run_submit(out_dir, checkpoint):
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
+            if len(net.detections) == 0:
+                continue
             revert(net, images) #unpad, undo test-time augment etc ....
 
 
@@ -190,7 +192,6 @@ def run_submit(out_dir, checkpoint):
             name = test_dataset.ids[indices[b]]
 
             if name in ids:
-                print(1111)
                 mask = filter_small(mask, 128)
             else:
                 mask = filter_small(mask, 16)

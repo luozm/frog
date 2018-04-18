@@ -17,6 +17,7 @@ from net.draw import draw_multi_proposal_metric, draw_mask_metric
 from net.metric import compute_precision_for_box, compute_average_precision_for_mask
 from net.se_resnext50_mask_rcnn.configuration import Configuration
 from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
+from dataset.transform import normalize_transform
 
 
 ## overwrite functions ###
@@ -58,13 +59,14 @@ def revert(net, images):
 
         net.masks[b] = net.masks[b][:height,:width]
 
-    return net, image
+    return net
 
 
 def eval_augment(image, multi_mask, meta, index):
 
     pad_image = pad_to_factor(image, factor=16)
-    input = torch.from_numpy(pad_image.transpose((2,0,1))).float().div(255)
+    image_norm = normalize_transform(pad_image)
+    input = torch.from_numpy(image_norm.transpose((2,0,1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
 
     return input, box, label, instance, meta, image, index
@@ -85,7 +87,7 @@ def eval_collate(batch):
 
 
 # --------------------------------------------------------------
-def run_evaluate(val_split, out_dir, checkpoint):
+def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
 
     ## setup  ---------------------------
     os.makedirs(out_dir + '/evaluate/overlays', exist_ok=True)
@@ -122,8 +124,8 @@ def run_evaluate(val_split, out_dir, checkpoint):
 
     test_dataset = ScienceDataset(
         val_split,
-        img_folder='train1_norm',
-        mask_folder='stage1_train',
+        img_folder=img_folder,
+        mask_folder=mask_folder,
         mode='train',
         transform=eval_augment)
 
@@ -279,8 +281,12 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
 #    run_evaluate('train1_val_67')
     run_evaluate(
-        'train1_ids_gray2_500_nofolder',
-        RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01',
-        RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth')
+        'test1_all_65',
+#        'test1_gray_black_53',
+#        'valid1_ids_gray2_43_nofolder',
+        img_folder='test1_norm',
+        mask_folder='stage1_test',
+        out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01',
+        checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth')
 
     print('\nsucess!')
