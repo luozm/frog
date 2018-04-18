@@ -146,12 +146,12 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
     ## start evaluation here! ##############################################
     log.write('** start evaluation here! **\n')
     mask_average_precisions = []
+    mask_precisions_50 = []
     box_precisions_50 = []
     rpn_box_precisions_50 = []
 
     test_num = 0
-    test_loss = np.zeros(5, np.float32)
-    test_acc = 0
+#    test_loss = np.zeros(6, np.float32)
     for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, images, indices) in enumerate(test_loader, 0):
         if all((truth_label > 0).sum() == 0 for truth_label in truth_labels):
             continue
@@ -181,7 +181,6 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
         detections = net.detections.cpu().numpy()
 
         for b in range(batch_size):
-            #image0 = (inputs[b].transpose((1,2,0))*255).astype(np.uint8)
             image = images[b]
             height,width = image.shape[:2]
             mask = masks[b]
@@ -215,6 +214,7 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
             box_precision = box_precision[0]
 
             mask_average_precisions.append(mask_average_precision)
+            mask_precisions_50.append(mask_precision[0][1])
             box_precisions_50.append(box_precision)
             rpn_box_precisions_50.append(rpn_box_precision)
 
@@ -235,9 +235,6 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
             all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
             all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
 
-            #image_show('overlay_mask',overlay_mask)
-            #image_show('overlay_truth',overlay_truth)
-            #image_show('overlay_error',overlay_error)
 #            image_show('all1', all1)
 #            image_show('all6', all6)
 #            image_show('all7', all7)
@@ -247,31 +244,31 @@ def run_evaluate(val_split, img_folder, mask_folder, out_dir, checkpoint):
             cv2.waitKey(1)
 
         # print statistics  ------------
-        test_acc += 0 #batch_size*acc[0][0]
         # test_loss += batch_size*np.array((
         #                    loss.cpu().data.numpy(),
         #                    net.rpn_cls_loss.cpu().data.numpy(),
         #                    net.rpn_reg_loss.cpu().data.numpy(),
-        #                    0, 0,
+        #                    net.rcnn_cls_loss.cpu().data.numpy(),
+        #                    net.rcnn_reg_loss.cpu().data.numpy(),
+        #                    net.mask_cls_loss.cpu().data.numpy(),
         #                  ))
         test_num += batch_size
 
-    #assert(test_num == len(test_loader.sampler))
-    test_acc = test_acc/test_num
-    test_loss = test_loss/test_num
+#    test_loss = test_loss/test_num
 
-    log.write('initial_checkpoint  = %s\n'%checkpoint)
-    log.write('test_acc  = %0.5f\n'%(test_acc))
-    log.write('test_loss = %0.5f\n'%(test_loss[0]))
-    log.write('test_num  = %d\n'%(test_num))
+    log.write('initial_checkpoint  = %s\n' % checkpoint)
+#    log.write('test_loss = %0.5f\t%0.5f\t%0.5f\t%0.5f\t%0.5f\t%0.5f\n' % tuple(test_loss))
+    log.write('test_num  = %d\n' % test_num)
     log.write('\n')
 
     mask_average_precisions = np.array(mask_average_precisions)
+    mask_precisions_50 = np.array(mask_precisions_50)
     rpn_box_precisions_50 = np.array(rpn_box_precisions_50)
     box_precisions_50 = np.array(box_precisions_50)
     log.write('-------------\n')
     log.write('rpn_box_precision@0.5 = %0.5f\n' % rpn_box_precisions_50.mean())
     log.write('box_precision@0.5 = %0.5f\n' % box_precisions_50.mean())
+    log.write('mask_precision@0.5 = %0.5f\n' % mask_precisions_50.mean())
     log.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
     log.write('\n')
 
@@ -281,8 +278,8 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
 #    run_evaluate('train1_val_67')
     run_evaluate(
-        'test1_all_65',
-#        'test1_gray_black_53',
+#        'test1_all_65',
+        'test1_gray_black_53',
 #        'valid1_ids_gray2_43_nofolder',
         img_folder='test1_norm',
         mask_folder='stage1_test',
