@@ -224,7 +224,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     # update LR by step
 #    LR = None
-    LR = StepLR([(0, 0.01),  (15000, 0.001)])
+    LR = StepLR([(0, 0.01),  (5000, 0.001), (10000, 0.0001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
                           lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
 
