@@ -16,8 +16,6 @@ from torch import optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
-from torchvision.transforms import ColorJitter, ToPILImage
-from PIL import Image
 
 from utility.file import Logger, time_to_str
 from utility.draw import image_show

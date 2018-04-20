@@ -13,7 +13,7 @@ import numpy as np
 
 # for debug
 def dummy_transform(image):
-    print ('\tdummy_transform')
+    print('\tdummy_transform')
     return image
 
 
