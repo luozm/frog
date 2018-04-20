@@ -303,7 +303,6 @@ class CropRoi(nn.Module):
         crops = torch.cat(crops, 0)
         indices = torch.cat(indices, 0).view(-1)
         crops = crops[torch.sort(indices)[1]]
-        #crops = torch.index_select(crops,0,index)
 
         return crops
 
@@ -312,19 +311,19 @@ class RcnnHead(nn.Module):
     def __init__(self, cfg, in_channels):
         super(RcnnHead, self).__init__()
         self.num_classes = cfg.num_classes
-        self.crop_size   = cfg.rcnn_crop_size
+        self.crop_size = cfg.rcnn_crop_size
 
-        self.fc1 = nn.Linear(in_channels*self.crop_size*self.crop_size,1024)
-        self.fc2 = nn.Linear(1024,1024)
-        self.logit = nn.Linear(1024,self.num_classes)
-        self.delta = nn.Linear(1024,self.num_classes*4)
+        self.fc1 = nn.Linear(in_channels*self.crop_size*self.crop_size, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+        self.logit = nn.Linear(1024, self.num_classes)
+        self.delta = nn.Linear(1024, self.num_classes*4)
 
     def forward(self, crops):
 
         x = crops.view(crops.size(0), -1)
         x = F.relu(self.fc1(x), inplace=True)
         x = F.relu(self.fc2(x), inplace=True)
-        x = F.dropout(x,0.5,training=self.training)
+        x = F.dropout(x, 0.5, training=self.training)
         logits = self.logit(x)
         deltas = self.delta(x)
 
@@ -361,7 +360,7 @@ class MaskHead(nn.Module):
 
 
 class MaskDepthNet(nn.Module):
-    """Mask RCNN with SE-ResNext-50
+    """Mask RCNN with SE-ResNext-50 (add depth head)
 
     """
 
@@ -410,7 +409,7 @@ class MaskDepthNet(nn.Module):
 
         if mode in ['train', 'valid']:
             self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances, self.depth_instances, = \
-                make_depth_target(cfg, mode, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_depths)
+                make_depth_target(cfg, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_instances, truth_depths)
 
         # segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
@@ -433,11 +432,10 @@ class MaskDepthNet(nn.Module):
         self.rcnn_cls_loss, self.rcnn_reg_loss = \
             rcnn_loss(self.rcnn_logits, self.rcnn_deltas, self.rcnn_labels, self.rcnn_targets)
 
-        ## self.mask_cls_loss = Variable(torch.cuda.FloatTensor(1).zero_()).sum()
         self.mask_cls_loss  = \
              mask_loss(self.mask_logits, self.mask_labels, self.mask_instances)
 
-        self.depth_loss = depth_loss(self.depth_logits, self.mask_instances)
+        self.depth_loss = depth_loss(self.depth_logits, self.mask_labels, self.depth_instances)
 
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
                           + self.rcnn_cls_loss + self.rcnn_reg_loss \

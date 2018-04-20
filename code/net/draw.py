@@ -264,3 +264,104 @@ def draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance):
     #image_show('all mask : image, truth, predict, error, metric',all,1)
 
     return all
+
+
+def draw_depth_metric(image, mask, depth, truth_box, truth_instance, truth_depth):
+
+    H,W = image.shape[:2]
+    overlay_truth = np.zeros((H,W,3),np.uint8)  #yellow
+    overlay_mask = np.zeros((H,W,3),np.uint8)  #pink
+    overlay_error = np.zeros((H,W,3),np.uint8)
+    overlay_metric = np.zeros((H,W,3),np.uint8)
+    overlay_contour = image.copy()
+    average_overlap = 0
+    average_precision = 0
+    precision_50 = 0
+    precision_70 = 0
+
+    if len(truth_box)>0:
+
+        #pixel error: fp and miss
+        truth_mask = instance_to_multi_mask(truth_instance)
+        truth = truth_mask != 0
+
+        predict = mask != 0
+        hit = truth & predict
+        miss = truth & (~predict)
+        fp = (~truth) & predict
+
+        overlay_error[hit ]=[128,128,0]
+        overlay_error[fp  ]=[255,0,255]
+        overlay_error[miss]=[0,255,255]
+
+        # truth and mask ---
+        overlay_mask [predict]=[64,0,64]
+        overlay_truth[truth  ]=[0,64,64]
+        overlay_mask  = multi_mask_to_contour_overlay(mask,overlay_mask,[255,0,255])
+        overlay_truth = multi_mask_to_contour_overlay(truth_mask,overlay_truth,[0,255,255])
+
+        overlay_contour = multi_mask_to_contour_overlay(mask,overlay_contour,[255,0,255])
+
+        # metric -----
+        predict = mask
+        truth = instance_to_multi_mask(truth_instance)
+
+        num_truth = len(np.unique(truth))-1
+        num_predict = len(np.unique(predict))-1
+
+        if num_predict!=0:
+            intersection = np.histogram2d(truth.flatten(), predict.flatten(), bins=(num_truth+1, num_predict+1))[0]
+
+            # Compute areas (needed for finding the union between all objects)
+            area_true = np.histogram(truth,   bins=num_truth+1)[0]
+            area_pred = np.histogram(predict, bins=num_predict+1)[0]
+            area_true = np.expand_dims(area_true, -1)
+            area_pred = np.expand_dims(area_pred,  0)
+            union = area_true + area_pred - intersection
+            intersection = intersection[1:,1:]   # Exclude background from the analysis
+            union = union[1:,1:]
+            union[union == 0] = 1e-9
+            iou = intersection / union # Compute the intersection over union
+
+            precision = {}
+            average_precision = 0
+            thresholds = np.arange(0.5, 1.0, 0.05)
+            for t in thresholds:
+                tp, fp, fn = compute_precision(t, iou)
+                prec = tp / (tp + fp + fn)
+                precision[round(t,2) ]=prec
+                average_precision += prec
+            average_precision /= len(thresholds)
+            precision_50 = precision[0.50]
+            precision_70 = precision[0.70]
+
+
+            #iou = num_truth, num_predict
+            overlap = np.max(iou,1)
+            assign  = np.argmax(iou,1)
+            #print(overlap)
+
+            for t in range(num_truth):
+                s = overlap[t]
+                if s>0.5:
+                    color = to_color(max(0.0,(overlap[t]-0.5)/0.5), [255,255,255])
+                else:
+                    color = [0,0,255] #to_color(max(0.0,(0.5-overlap[t])/0.5), [0,255,0])
+                overlay_metric[truth_instance[t]>0]=color
+
+            overlay_metric = multi_mask_to_contour_overlay(mask,overlay_metric,[255,0,255])
+            average_overlap = overlap.mean()
+
+    draw_shadow_text(overlay_truth,   'truth',  (5,15),0.5, (255,255,255), 1)
+    draw_shadow_text(overlay_mask,    'mask',   (5,15),0.5, (255,255,255), 1)
+    draw_shadow_text(overlay_error,   'error',  (5,15),0.5, (255,255,255), 1)
+    draw_shadow_text(overlay_metric,  '%0.2f iou '%average_overlap,    (5,15),0.5, (255,255,255), 1)
+    draw_shadow_text(overlay_contour, 'contour', (5,15),0.5, (255,255,255), 1)
+
+    all = np.hstack((overlay_truth, overlay_mask, overlay_error, overlay_metric, overlay_contour, image, ))
+    draw_shadow_text(all,'%0.2f prec@0.5'%(precision_50), (5,H-45),0.5, (255,255,255), 1)
+    draw_shadow_text(all,'%0.2f prec@0.7'%(precision_70), (5,H-30),0.5, (255,255,255), 1)
+    draw_shadow_text(all,'%0.2f prec'%average_precision,  (5,H-15),0.5, (255,255,0), 1)
+    #image_show('all mask : image, truth, predict, error, metric',all,1)
+
+    return all

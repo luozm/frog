@@ -278,12 +278,12 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
 #    run_evaluate('train1_val_67')
     run_evaluate(
-#        'test1_all_65',
-        'test1_gray_black_53',
+        'test1_all_65',
+#        'test1_gray_black_53',
 #        'valid1_ids_gray2_43_nofolder',
-        img_folder='test1_norm',
+        img_folder='stage1_test',
         mask_folder='stage1_test',
-        out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01',
-        checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth')
+        out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-02',
+        checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-02/checkpoint/30055_model.pth')
 
     print('\nsucess!')

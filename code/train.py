@@ -68,18 +68,6 @@ def train_augment(image, multi_mask, meta, index):
         image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
         image_norm = normalize_transform(image_crop)
 
-    # image = Image.fromarray(image)
-    # multi_mask = Image.fromarray(multi_mask)
-    #
-    # image = ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5)(image)
-
-#    elastic = GaussianDistortion(grid_height=10, grid_width=10, magnitude=8, probability=0.6)
-#    image, multi_mask = elastic.perform_operation([image, multi_mask])
-    # image.show()
-    # multi_mask.show()
-    # image = np.array(image)
-    # multi_mask = np.array(multi_mask)
-
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask_crop)
 
@@ -101,9 +89,8 @@ def valid_augment(image, multi_mask, meta, index):
     # if min_size < WIDTH:
     #     scale = WIDTH/min_size
     #     image, multi_mask = fix_resize_transform2(image, multi_mask, math.ceil(scale*width), math.ceil(scale*height))
-    # image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
 
-    image = pad_to_factor(image, factor=16)
+    image,  multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
     image_norm = normalize_transform(image)
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
@@ -139,7 +126,6 @@ def evaluate(net, test_loader):
 
     test_num = 0
     test_loss = np.zeros(6, np.float32)
-    test_acc = 0
     for i, (inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices) in enumerate(test_loader, 0):
 
         with torch.no_grad():
@@ -147,10 +133,7 @@ def evaluate(net, test_loader):
             net(inputs, truth_boxes,  truth_labels, truth_instances )
             loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances)
 
-        # acc    = dice_loss(masks, labels) #todo
-
         batch_size = len(indices)
-        test_acc  += 0 #batch_size*acc[0][0]
         test_loss += batch_size*np.array((
                            loss.cpu().data.numpy(),
                            net.rpn_cls_loss.cpu().data.numpy(),
@@ -162,9 +145,8 @@ def evaluate(net, test_loader):
         test_num += batch_size
 
     assert(test_num == len(test_loader.sampler))
-    test_acc = test_acc/test_num
     test_loss = test_loss/test_num
-    return test_loss, test_acc
+    return test_loss
 
 
 def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_file=None, show_train_img=True):
@@ -248,8 +230,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     train_dataset = ScienceDataset(
         train_split,
-        img_folder='stage1_train_fixed',
-        mask_folder='stage1_train_fixed',
+        img_folder='train1_norm',
+        mask_folder='stage1_train',
         mode='train',
         transform=train_augment)
 
@@ -264,15 +246,15 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     valid_dataset = ScienceDataset(
         val_split,
-        img_folder='stage1_test',
-        mask_folder='stage1_test',
+        img_folder='train1_norm',
+        mask_folder='stage1_train',
         mode='train',
         transform=valid_augment)
 
     valid_loader = DataLoader(
         valid_dataset,
         sampler=SequentialSampler(valid_dataset),
-        batch_size=1,
+        batch_size=batch_size,
         drop_last=False,
         num_workers=4,
         pin_memory=True,
@@ -304,11 +286,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     log.write('-------------------------------------------------------------------------------------------------------------------------------\n')
 
     train_loss = np.zeros(6, np.float32)
-#    train_acc = 0.0
     valid_loss = np.zeros(6, np.float32)
-#    valid_acc = 0.0
     batch_loss = np.zeros(6, np.float32)
-#    batch_acc = 0.0
     rate = 0
 
     start = timer()
@@ -317,7 +296,6 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     while i < num_iters:  # loop over the dataset multiple times
         sum_train_loss = np.zeros(6, np.float32)
-        sum_train_acc = 0.0
         sum = 0
 
         net.set_mode('train')
@@ -384,7 +362,6 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 optimizer.zero_grad()
 
             # print statistics  ------------
-#            batch_acc = acc[0][0]
             batch_loss = np.array((
                            loss.cpu().data.numpy(),
                            net.rpn_cls_loss.cpu().data.numpy(),
@@ -394,13 +371,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                            net.mask_cls_loss.cpu().data.numpy(),
                          ))
             sum_train_loss += batch_loss
-#            sum_train_acc += batch_acc
             sum += 1
             if i % iter_smooth == 0:
                 train_loss = sum_train_loss/sum
-#                train_acc = sum_train_acc /sum
                 sum_train_loss = np.zeros(6, np.float32)
-#                sum_train_acc = 0.
                 sum = 0
 
             print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
@@ -535,8 +509,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_fixed_all_664', val_split='test1_all_65',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-fixed-train664-without-img-norm-01',
+    run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-02',
               pretrain_file=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
               show_train_img=True)
 

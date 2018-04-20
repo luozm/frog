@@ -16,16 +16,14 @@ from torch import optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
-from torchvision.transforms import ColorJitter, ToPILImage
-from PIL import Image
 
 from utility.file import Logger, time_to_str
 from utility.draw import image_show
 from dataset.reader import ScienceDataset, multi_mask_to_annotation, mask_to_inner_contour, multi_mask_to_depth_map
 from net.learning_rate import get_learning_rate, adjust_learning_rate, StepLR
-from net.se_resnext50_mask_rcnn.configuration import Configuration
-from net.se_resnext50_mask_rcnn.se_resnext50_mask_rcnn import MaskNet
-from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric
+from net.se_resnext50_mask_rcnn_depth.configuration import Configuration
+from net.se_resnext50_mask_rcnn_depth.se_resnext50_mask_rcnn_depth import MaskDepthNet
+from net.draw import instance_to_multi_mask, draw_multi_proposal_metric, draw_mask_metric, draw_depth_metric
 from dataset.transform import random_shift_scale_rotate_transform2,\
     random_crop_transform2, random_horizontal_flip_transform2,\
     random_vertical_flip_transform2, random_rotate90_transform2, \
@@ -121,19 +119,18 @@ def evaluate(net, test_loader):
     """
 
     test_num = 0
-    test_loss = np.zeros(6, np.float32)
-    test_acc = 0
+    test_loss = np.zeros(7, np.float32)
+
     for i, (inputs, images, truth_boxes, truth_labels, truth_instances, truth_depths, metas, indices) in enumerate(test_loader, 0):
 
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs, truth_boxes,  truth_labels, truth_instances, truth_depths)
-            loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances, truth_depths)
+            loss = net.loss()
 
         # acc    = dice_loss(masks, labels) #todo
 
         batch_size = len(indices)
-        test_acc  += 0 #batch_size*acc[0][0]
         test_loss += batch_size*np.array((
                            loss.cpu().data.numpy(),
                            net.rpn_cls_loss.cpu().data.numpy(),
@@ -146,9 +143,8 @@ def evaluate(net, test_loader):
         test_num += batch_size
 
     assert(test_num == len(test_loader.sampler))
-    test_acc = test_acc/test_num
     test_loss = test_loss/test_num
-    return test_loss, test_acc
+    return test_loss
 
 
 def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_file=None, show_train_img=True):
@@ -176,7 +172,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
     log.write('** net setting **\n')
     cfg = Configuration()
-    net = MaskNet(cfg).cuda()
+    net = MaskDepthNet(cfg).cuda()
 
     if resume_checkpoint is not None:
         log.write('\tinitial_checkpoint = %s\n' % resume_checkpoint)
@@ -287,12 +283,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     log.write(' rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          \n')
     log.write('-------------------------------------------------------------------------------------------------------------------------------\n')
 
-    train_loss = np.zeros(6, np.float32)
-#    train_acc = 0.0
-    valid_loss = np.zeros(6, np.float32)
-#    valid_acc = 0.0
-    batch_loss = np.zeros(6, np.float32)
-#    batch_acc = 0.0
+    train_loss = np.zeros(7, np.float32)
+    valid_loss = np.zeros(7, np.float32)
+    batch_loss = np.zeros(7, np.float32)
+
     rate = 0
 
     start = timer()
@@ -300,13 +294,12 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     i = 0
 
     while i < num_iters:  # loop over the dataset multiple times
-        sum_train_loss = np.zeros(6, np.float32)
-        sum_train_acc = 0.0
+        sum_train_loss = np.zeros(7, np.float32)
         sum = 0
 
         net.set_mode('train')
         optimizer.zero_grad()
-        for inputs, images, truth_boxes, truth_labels, truth_instances, truth_depth, metas, indices in train_loader:
+        for inputs, images, truth_boxes, truth_labels, truth_instances, truth_depths, metas, indices in train_loader:
             if all(len(b) == 0 for b in truth_boxes):
                 continue
 
@@ -321,15 +314,15 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             if i % iter_valid == 0:
                 net.set_mode('valid')
-                valid_loss, valid_acc = evaluate(net, valid_loader)
+                valid_loss = evaluate(net, valid_loader)
                 net.set_mode('train')
 
                 print('\r', end='', flush=True)
-                log.write('%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s\n' % (\
+                log.write('%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %s\n' % (\
                          rate, i/1000, epoch, num_products/1000000,
-                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
-                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
-                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
+                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5], valid_loss[6],
+                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5], train_loss[6],
+                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5], batch_loss[6],
                          time_to_str((timer() - start)/60)))
                 time.sleep(0.01)
 
@@ -357,8 +350,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             # one iteration update  -------------
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes, truth_labels, truth_instances)
-            loss = net.loss(inputs, truth_boxes, truth_labels, truth_instances)
+            net(inputs, truth_boxes, truth_labels, truth_instances, truth_depths)
+            loss = net.loss()
 
             # accumulated update
             loss.backward()
@@ -368,7 +361,6 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 optimizer.zero_grad()
 
             # print statistics  ------------
-#            batch_acc = acc[0][0]
             batch_loss = np.array((
                            loss.cpu().data.numpy(),
                            net.rpn_cls_loss.cpu().data.numpy(),
@@ -376,22 +368,20 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                            net.rcnn_cls_loss.cpu().data.numpy(),
                            net.rcnn_reg_loss.cpu().data.numpy(),
                            net.mask_cls_loss.cpu().data.numpy(),
+                           net.depth_loss.cpu().data.numpy(),
                          ))
             sum_train_loss += batch_loss
-#            sum_train_acc += batch_acc
             sum += 1
             if i % iter_smooth == 0:
                 train_loss = sum_train_loss/sum
-#                train_acc = sum_train_acc /sum
-                sum_train_loss = np.zeros(6, np.float32)
-#                sum_train_acc = 0.
+                sum_train_loss = np.zeros(7, np.float32)
                 sum = 0
 
-            print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
+            print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f %0.2f | %s  %d,%d,%s' % (\
                          rate, i/1000, epoch, num_products/1000000,
-                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
-                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
-                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
+                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5], valid_loss[6],
+                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5], train_loss[6],
+                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5], batch_loss[6],
                          time_to_str((timer() - start)/60), i, j, ''), end='', flush=True)#str(inputs.size()))
             j += 1
 
@@ -418,8 +408,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
                 detections = net.detections.data.cpu().numpy()
                 masks = net.masks
+                depths = net.depths
 
-                #print('train',batch_size)
                 for b in range(1):
 #                for b in range(batch_size):
 
@@ -431,6 +421,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     truth_label = truth_labels[b]
                     truth_instance = truth_instances[b]
                     truth_mask = instance_to_multi_mask(truth_instance)
+                    truth_depth = truth_depths[b]
 
                     rpn_logit_flat = rpn_logits_flat[b]
                     rpn_delta_flat = rpn_deltas_flat[b]
@@ -450,10 +441,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                         rcnn_proposal = rcnn_proposals[index]
 
                     mask = masks[b]
-
+                    depth = depths[b]
 
                     #box = proposal[:,1:5]
-                    #mask = masks[b]
 
                     ## draw --------------------------------------------------------------------------
                     #contour_overlay = multi_mask_to_contour_overlay(truth_mask, image, [255,255,0] )
@@ -467,6 +457,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
                     all6 = draw_multi_proposal_metric(cfg, image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
                     all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
+#                    all8 = draw_depth_metric(image, mask, depth, truth_box, truth_instance, truth_depth)
 
                     # image_show('color_overlay',color_overlay,1)
                     # image_show('rpn_prob',all1,1)
@@ -478,17 +469,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     image_show('rpn_precision', all5, 1)
                     image_show('rcnn_precision', all6, 1)
                     image_show('mask_precision', all7, 1)
-
-
-                    # summary = np.vstack([
-                    #     all5,
-                    #     np.hstack([
-                    #         all1,
-                    #         np.vstack( [all2, np.zeros((H,2*W,3),np.uint8)])
-                    #     ])
-                    # ])
-                    # draw_shadow_text(summary, 'iter=%08d'%i,  (5,3*HEIGHT-15),0.5, (255,255,255), 1)
-                    # image_show('summary',summary,1)
+#                    image_show('depth_precision', all8, 1)
 
                     name = train_dataset.ids[indices[b]].split('/')[-1]
                     #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
@@ -519,9 +500,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_train(train_split='train1_purple_108', val_split='train1_purple_108',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-purple108-norm-01',
-              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+    run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-depth-train500-train500-norm-01',
+#              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
               show_train_img=True)
 
     print('\nsucess!')
