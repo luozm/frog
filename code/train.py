@@ -29,18 +29,79 @@ from dataset.transform import random_shift_scale_rotate_transform2,\
     random_vertical_flip_transform2, random_rotate90_transform2, \
     fix_crop_transform2, normalize_transform, fix_resize_transform2, pad_to_factor
 
+from dataset.transform_new import *
+
 
 # -------------------------------------------------------------------------------------
 # common settings
 # -------------------------------------------------------------------------------------
 
-# size after resize
+# input size for model after resize
 WIDTH, HEIGHT = 256, 256
 
 
 # -------------------------------------------------------------------------------------
 # augmentations
 # -------------------------------------------------------------------------------------
+
+def train_augment_new(image, multi_mask, meta, index):
+
+    # -----------------------------------------
+    # illumination transforms
+    # -----------------------------------------
+    if 1:
+        type = random.randint(0, 4)
+        if type == 0:
+            image = random_transform(image, u=0.5, func=do_custom_process1, gamma=[0.8, 2.5], alpha=[0.7, 0.9], beta=[1.0, 2.0])
+        elif type == 1:
+            image = random_transform(image, u=0.5, func=do_contrast, alpha=[0.5, 2.5])
+        elif type == 2:
+            image = random_transform(image, u=0.5, func=do_gamma, gamma=[1, 3])
+        elif type == 3:
+            image = random_transform(image, u=0.5, func=do_clahe, clip=[1, 3], grid=[8, 16])
+        else:
+            pass
+
+    # -----------------------------------------
+    # filter/noises
+    # -----------------------------------------
+    if 1:
+        type = random.randint(0,2)
+        if type == 0:
+            image = random_transform(image, u=0.5, func=do_unsharp, size=[9,19], strength=[0.2,0.4], alpha=[4,6])
+        elif type == 1:
+            image = random_transform(image, u=0.5, func=do_speckle_noise, sigma=[0.1,0.5])
+        else:
+            pass
+
+    # -----------------------------------------
+    # geometric transforms
+    # -----------------------------------------
+    type = random.randint(0,2)
+    if type == 0:
+        image, multi_mask = random_transform2(image, multi_mask, u=0.5, func=do_stretch2, scale_x=[1,2], scale_y=[1,1])
+    if type == 1:
+        image, multi_mask = random_transform2(image, multi_mask, u=0.5, func=do_stretch2, scale_x=[1,1], scale_y=[1,2])
+
+    image, multi_mask = random_transform2(image, multi_mask, u=0.5, func=do_shift_scale_rotate2, dx=[0,0],dy=[0,0], scale=[1/2,2], angle=[-45,45])
+    image, multi_mask = random_transform2(image, multi_mask, u=0.5, func=do_elastic_transform2, grid=[8,64], distort=[0,0.5])
+
+    image, multi_mask = do_flip_transpose2(image, multi_mask, random.randint(0, 8))
+    image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
+
+    # -----------------------------------------
+    # image normalization: (img - mean)/std
+    # -----------------------------------------
+    image_norm = normalize_transform(image_crop)
+    # if std of image is 0, recrop it
+    while image_norm is None:
+        image_crop, multi_mask_crop = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
+        image_norm = normalize_transform(image_crop)
+    input = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
+    box, label, instance = multi_mask_to_annotation(multi_mask_crop)
+
+    return input, image_crop, box, label, instance, meta, index
+
 
 def train_augment(image, multi_mask, meta, index):
     """train time augmentation
@@ -231,7 +292,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
         img_folder='train1_norm',
         mask_folder='stage1_train',
         mode='train',
-        transform=train_augment)
+        transform=train_augment_new)
 
     train_loader = DataLoader(
         train_dataset,
@@ -313,7 +374,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             if i % iter_valid == 0:
                 net.set_mode('valid')
-                valid_loss, valid_acc = evaluate(net, valid_loader)
+                valid_loss = evaluate(net, valid_loader)
                 net.set_mode('train')
 
                 print('\r', end='', flush=True)
@@ -377,10 +438,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
                          rate, i/1000, epoch, num_products/1000000,
-                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
-                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
-                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
-                         time_to_str((timer() - start)/60), i, j, ''), end='', flush=True)#str(inputs.size()))
+                         valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],
+                         train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],
+                         batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],
+                         time_to_str((timer() - start)/60), i, j, ''), end='', flush=True)
             j += 1
 
             # ---------------------------------------------------------------------------
