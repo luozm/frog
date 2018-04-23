@@ -4,6 +4,7 @@ import copy
 import torch
 import numpy as np
 from torch.autograd import Variable
+import matplotlib.pyplot as plt
 
 from utility.draw import image_show
 from net.lib.box.process import is_small_box
@@ -29,7 +30,33 @@ def add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label, score=-1
 # mask target ********************************************************************
 #<todo> mask crop should match align kernel (same wait to handle non-integer pixel location (e.g. 23.5, 32.1))
 def crop_instance(instance, box, size, threshold=0.5):
-    H, W = instance.shape
+    if len(instance.shape) == 2:
+        H, W = instance.shape
+        x0, y0, x1, y1 = np.rint(box).astype(np.int32)
+        x0 = max(0, x0)
+        y0 = max(0, y0)
+        x1 = min(W, x1)
+        y1 = min(H, y1)
+
+        # <todo> filter this
+        if 1:
+            if x0 == x1:
+                x0 = x0 - 1
+                x1 = x1 + 1
+                x0 = max(0, x0)
+                x1 = min(W, x1)
+            if y0 == y1:
+                y0 = y0 - 1
+                y1 = y1 + 1
+                y0 = max(0, y0)
+                y1 = min(H, y1)
+
+        # print(x0,y0,x1,y1)
+        crop = instance[y0:y1 + 1, x0:x1 + 1]
+        crop = cv2.resize(crop, (size, size), interpolation=cv2.INTER_LINEAR)
+        #crop = (crop > threshold).astype(np.float32)
+        return crop
+    H, W = instance.shape[1:]
     x0, y0, x1, y1 = np.rint(box).astype(np.int32)
     x0 = max(0, x0)
     y0 = max(0, y0)
@@ -50,10 +77,11 @@ def crop_instance(instance, box, size, threshold=0.5):
             y1 = min(H, y1)
 
     #print(x0,y0,x1,y1)
-    crop = instance[y0:y1+1, x0:x1+1]
+    crop = np.transpose(instance, (1, 2, 0))
+    crop = np.array(crop[y0:y1+1, x0:x1+1],np.float32)
     crop = cv2.resize(crop, (size, size))
-    crop = (crop > threshold).astype(np.float32)
-    return crop
+    #crop = (crop > threshold).astype(np.float32)
+    return np.transpose(crop, (2, 0, 1))
 
 
 # cpu version
@@ -112,6 +140,8 @@ def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_in
         box = sampled_proposal[i, 1:5]
         crop_depth = crop_instance(depth, box, cfg.mask_size)
         crop_ins = crop_instance(instance, box, cfg.mask_size)
+        #plt.imshow(crop_depth)
+        #plt.show()
         sampled_instance.append(crop_ins[np.newaxis, :, :])
         sampled_depth_map.append(crop_depth[np.newaxis, :, :])
 

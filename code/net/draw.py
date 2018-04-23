@@ -6,6 +6,7 @@ from net.layer.rpn_multi_target import unflat_to_c3
 from utility.draw import draw_shadow_text, to_color
 from net.metric import HIT, MISS, INVALID, TP, FP, compute_precision_for_box, draw_screen_rect, compute_precision
 from dataset.reader import instance_to_multi_mask, multi_mask_to_contour_overlay
+from skimage.color import gray2rgb
 
 
 def draw_multi_rpn_prob(cfg, image, rpn_prob_flat):
@@ -358,7 +359,8 @@ def draw_depth_metric(image, mask, depth, truth_box, truth_instance, truth_depth
     draw_shadow_text(overlay_metric,  '%0.2f iou '%average_overlap,    (5,15),0.5, (255,255,255), 1)
     draw_shadow_text(overlay_contour, 'contour', (5,15),0.5, (255,255,255), 1)
 
-    all = np.hstack((overlay_truth, overlay_mask, overlay_error, overlay_metric, overlay_contour, image, ))
+
+    all = np.hstack((overlay_truth, overlay_mask, overlay_error, overlay_metric, overlay_contour, image,))
     draw_shadow_text(all,'%0.2f prec@0.5'%(precision_50), (5,H-45),0.5, (255,255,255), 1)
     draw_shadow_text(all,'%0.2f prec@0.7'%(precision_70), (5,H-30),0.5, (255,255,255), 1)
     draw_shadow_text(all,'%0.2f prec'%average_precision,  (5,H-15),0.5, (255,255,0), 1)

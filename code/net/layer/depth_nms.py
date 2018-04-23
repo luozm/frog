@@ -34,25 +34,30 @@ def depth_merge(cfg, inputs, proposals, depth_logits):
 
         if len(index) != 0:
             depth = []
+            depth_non_zeros = []
             for i in index:
                 area = np.zeros((H, W), np.float32)
 
                 x0, y0, x1, y1 = proposals[i, 1:5].astype(np.int32)
                 h, w = y1-y0+1, x1-x0+1
-                crop = depth_logits[i, 0]
+                crop = np.array(depth_logits[i], np.float32)
                 crop = cv2.resize(crop, (w, h), interpolation=cv2.INTER_LINEAR)
                 area[y0:y1+1, x0:x1+1] = crop
 
                 depth.append(area)
+                depth_non_zero = np.zeros((H, W), np.int32)
+                depth_non_zero[np.nonzero(area)] += 1
+                depth_non_zeros.append(depth_non_zero)
 
             depth = np.array(depth, np.float32)
+            depth_non_zeros = np.array(depth_non_zeros, np.int32)
 
             depth_sum = depth.sum(axis=0)
-            depth_non_zeros = np.zeros((H, W), np.int32)
-            for i in range(H):
-                for j in range(W):
-                    depth_non_zeros[i, j] = sum(depth[:, i, j] != 0)
-            depth_mean = depth_sum/depth_non_zeros
+            depth_non_zeros = depth_non_zeros.sum(axis=0)
+            # for i in range(H):
+            #     for j in range(W):
+            #         depth_non_zeros[i, j] = sum(depth[:, i, j] != 0)
+            depth_mean = depth_sum/(depth_non_zeros + 1e-10)
 
         depths.append(depth_mean)
 

@@ -420,8 +420,8 @@ class MaskDepthNet(nn.Module):
             mask_crops = self.mask_crop(features, self.detections)
             self.mask_logits = data_parallel(self.mask_head, mask_crops)
             self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for
-            self.depth_logits = data_parallel(self.depth_head, mask_crops)
-            self.depths = depth_merge(cfg, inputs, self.rcnn_proposals, self.depth_logits)
+            self.depth_logits, self.depth_argmax = data_parallel(self.depth_head, mask_crops)
+            self.depths = depth_merge(cfg, inputs, self.rcnn_proposals, self.depth_argmax)
 
     def loss(self):
         cfg  = self.cfg
@@ -457,7 +457,7 @@ class MaskDepthNet(nn.Module):
         pretrain_state_dict = torch.load(pretrain_file)
         state_dict = self.state_dict()
 
-        keys = list(state_dict.keys())
+        keys = list(pretrain_state_dict.keys())
         for key in keys:
             if any(s in key for s in skip): continue
             state_dict[key] = pretrain_state_dict[key]

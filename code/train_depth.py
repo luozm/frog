@@ -18,8 +18,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 from utility.file import Logger, time_to_str
-from utility.draw import image_show
-from dataset.reader import ScienceDataset, multi_mask_to_annotation, mask_to_inner_contour, multi_mask_to_depth_map
+from utility.draw import image_show, image_show_color
+from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_depth_map, multi_mask_to_depth_map
 from net.learning_rate import get_learning_rate, adjust_learning_rate, StepLR
 from net.se_resnext50_mask_rcnn_depth.configuration import Configuration
 from net.se_resnext50_mask_rcnn_depth.se_resnext50_mask_rcnn_depth import MaskDepthNet
@@ -68,7 +68,7 @@ def train_augment(image, multi_mask, meta, index):
 
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask_crop)
-    depth = multi_mask_to_depth_map(multi_mask_crop)
+    depth = instance_to_depth_map(instance)
 
     return image_norm, image_crop, box, label, instance, depth, meta, index
 
@@ -86,7 +86,7 @@ def valid_augment(image, multi_mask, meta, index):
     image_norm = normalize_transform(image)
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
-    depth = multi_mask_to_depth_map(multi_mask)
+    depth = instance_to_depth_map(instance)
 
     return image_norm, image, box, label, instance, depth, meta, index
 
@@ -203,10 +203,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 + list(range(0, num_iters, 3000))#1*1000
 
     # update LR by step
-#    LR = None
-    LR = StepLR([(0, 0.01),  (55000, 0.001)])
+    LR = None
+#    LR = StepLR([(0, 0.01),  (55000, 0.001)])
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()),
-                          lr=0.01/iter_accum, momentum=0.9, weight_decay=0.0001)
+                          lr=0.0001/iter_accum, momentum=0.9, weight_decay=0.0001)
 
     start_iter = 0
     start_epoch = 0.
@@ -312,7 +312,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
             # validation
             # ---------------------------------------------------------------------------
 
-            if i % iter_valid == 0:
+            if i % iter_valid == 1:
                 net.set_mode('valid')
                 valid_loss = evaluate(net, valid_loader)
                 net.set_mode('train')
@@ -393,7 +393,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
                 net.set_mode('test')
                 with torch.no_grad():
-                    net(inputs, truth_boxes, truth_labels, truth_instances)
+                    net(inputs, truth_boxes, truth_labels, truth_instances, truth_depths)
 
                 batch_size, C, H, W = inputs.size()
 #                images = inputs.data.cpu().numpy()
@@ -457,7 +457,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     all5 = draw_multi_proposal_metric(cfg, image, rpn_proposal,  truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
                     all6 = draw_multi_proposal_metric(cfg, image, rcnn_proposal, truth_box, truth_label,[0,255,255],[255,0,255],[255,255,0])
                     all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
-#                    all8 = draw_depth_metric(image, mask, depth, truth_box, truth_instance, truth_depth)
+                    # all8 = draw_depth_metric(image, mask, depth, truth_box, truth_instance, truth_depth)
 
                     # image_show('color_overlay',color_overlay,1)
                     # image_show('rpn_prob',all1,1)
@@ -469,7 +469,10 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     image_show('rpn_precision', all5, 1)
                     image_show('rcnn_precision', all6, 1)
                     image_show('mask_precision', all7, 1)
-#                    image_show('depth_precision', all8, 1)
+                    # image_show('depth_precision', all8, 1)
+
+                    image_show_color('truth depth', truth_depth, 1)
+                    image_show_color('predict depth', depth, 1)
 
                     name = train_dataset.ids[indices[b]].split('/')[-1]
                     #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
@@ -502,7 +505,7 @@ if __name__ == '__main__':
 
     run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
               out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-depth-train500-train500-norm-01',
-#              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-depth-train500-train500-norm-01/checkpoint/00066000_model.pth',
               show_train_img=True)
 
     print('\nsucess!')

@@ -11,6 +11,19 @@ def image_show(name, image, resize=1):
     cv2.imshow(name, image.astype(np.uint8))
     cv2.resizeWindow(name, round(resize*W), round(resize*H))
 
+def image_show_color(name, image, resize=1):
+    H,W = image.shape[0:2]
+    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+    image = image.astype(np.uint8)
+    image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    # truth_depth = gray2rgb(truth_depth)
+    image *= 10
+    image[image > 255] = 255
+    # image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    image = cv2.applyColorMap(image, cv2.COLORMAP_JET)
+    cv2.imshow(name, image.astype(np.uint8))
+    cv2.resizeWindow(name, round(resize*W), round(resize*H))
+
 
 def draw_shadow_text(img, text, pt,  fontScale, color, thickness, color1=None, thickness1=None):
     if color1 is None: color1=(0,0,0)

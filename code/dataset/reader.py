@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import RandomSampler
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 
 from common import IMAGE_DIR, SPLIT_DIR
 from utility.file import read_list_from_file
@@ -219,13 +219,29 @@ def instance_to_multi_mask(instance):
 
     return multi_mask
 
-
+boundaries = [0,1,2,3,4,5,7,9,12,15,19,24,30,37,45,10000]
 def multi_mask_to_depth_map(multi_mask):
+    H, W = multi_mask.shape[:2]
     semantic_map = np.zeros(multi_mask.shape, np.int32)
     semantic_map[multi_mask > 0] = 1
     depth_map = distance_transform_edt(semantic_map)
 
+    for i in range(1, len(boundaries)):
+        depth_map[(depth_map > boundaries[i-1]) & (depth_map <= boundaries[i])] = i
     return depth_map
+
+def instance_to_depth_map(instance):
+    H, W = instance.shape[1:3]
+
+    semantic_map = np.zeros((H, W), np.int32)
+    for i in range(len(instance)):
+        semantic_map[binary_erosion(instance[i]) > 0] = 1
+    depth_map = distance_transform_edt(semantic_map)
+
+    for i in range(1, len(boundaries)):
+        depth_map[(depth_map > boundaries[i - 1]) & (depth_map <= boundaries[i])] = i
+    return depth_map
+
 
 ##------------------------------------------------------
 # def instance_to_ellipse(instance):
