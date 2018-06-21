@@ -21,8 +21,8 @@ from net.se_resnext50_mask_rcnn_depth.configuration import Configuration
 
 from net.layer.MaskDepthHead import MaskDepthHead
 from net.layer.depth_target import make_depth_target
-from net.layer.depth_loss import depth_loss
-from net.layer.depth_nms import depth_merge, make_empty_depths
+from net.layer.depth_loss import depth_loss, dir_loss
+from net.layer.depth_nms import depth_merge, make_empty_depths, depth_revert
 
 
 # -------------------------------------------------------------------------------------------
@@ -359,7 +359,7 @@ class MaskHead(nn.Module):
         return logits
 
 
-class MaskDepthNet(nn.Module):
+class MaskDirDepthNet(nn.Module):
     """Mask RCNN with SE-ResNext-50 (add depth head)
 
     """
@@ -380,7 +380,7 @@ class MaskDepthNet(nn.Module):
         self.mask_head = MaskHead(cfg, crop_channels)
         self.depth_head = MaskDepthHead(cfg, crop_channels)
 
-    def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None, truth_depths=None):
+    def forward(self, inputs, truth_boxes=None,  truth_labels=None, truth_instances=None, truth_dir=None, truth_depths=None):
         cfg = self.cfg
         mode = self.mode
         batch_size = len(inputs)
@@ -408,8 +408,8 @@ class MaskDepthNet(nn.Module):
             self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals,  self.rcnn_logits, self.rcnn_deltas)
 
         if mode in ['train', 'valid']:
-            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances, self.depth_instances, = \
-                make_depth_target(cfg, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_instances, truth_depths)
+            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances, self.dir_instances, self.depth_instances, = \
+                make_depth_target(cfg, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_instances, truth_dir, truth_depths)
 
         # segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
@@ -419,8 +419,9 @@ class MaskDepthNet(nn.Module):
         if len(self.rcnn_proposals) > 0:
             mask_crops = self.mask_crop(features, self.detections)
             self.mask_logits = data_parallel(self.mask_head, mask_crops)
-            self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for
-            self.depth_logits, self.depth_argmax = data_parallel(self.depth_head, mask_crops)
+            #self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for
+            self.dir_logits, self.depth_logits, self.depth_argmax = data_parallel(self.depth_head, mask_crops)
+            self.masks, self.depths_resize = depth_revert(cfg, inputs, self.rcnn_proposals, self.mask_logits, self.depth_argmax)
             self.depths = depth_merge(cfg, inputs, self.rcnn_proposals, self.depth_argmax)
 
     def loss(self):
@@ -434,6 +435,119 @@ class MaskDepthNet(nn.Module):
 
         self.mask_cls_loss  = \
              mask_loss(self.mask_logits, self.mask_labels, self.mask_instances)
+
+        self.dir_loss = dir_loss(self.dir_logits, self.mask_labels, self.dir_instances)
+        self.depth_loss = depth_loss(self.depth_logits, self.mask_labels, self.depth_instances)
+
+        self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
+                          + self.rcnn_cls_loss + self.rcnn_reg_loss \
+                          + self.mask_cls_loss + self.dir_loss+ self.depth_loss
+
+        return self.total_loss
+
+    # <todo> freeze bn for imagenet pretrain
+    def set_mode(self, mode):
+        self.mode = mode
+        if mode in ['eval', 'valid', 'test']:
+            self.eval()
+        elif mode in ['train']:
+            self.train()
+        else:
+            raise NotImplementedError
+
+    def load_pretrain(self, pretrain_file, skip=[]):
+        pretrain_state_dict = torch.load(pretrain_file)
+        state_dict = self.state_dict()
+
+        keys = list(pretrain_state_dict.keys())
+        for key in keys:
+            if any(s in key for s in skip): continue
+            state_dict[key] = pretrain_state_dict[key]
+
+        self.load_state_dict(state_dict)
+
+
+class MaskDepthNet(nn.Module):
+    """Mask RCNN with SE-ResNext-50 (add depth head)
+
+    """
+
+    def __init__(self, cfg):
+        super(MaskDepthNet, self).__init__()
+        self.version = 'net version \'mask-depth-rcnn-se-resnext50-fpn\''
+        self.cfg = cfg
+        self.mode = 'train'
+
+        feature_channels = 256
+        crop_channels = feature_channels
+        self.feature_net = FeatureNet(cfg, 3, feature_channels)
+        self.rpn_head = RpnMultiHead(cfg, feature_channels)
+        self.rcnn_crop = CropRoi(cfg, cfg.rcnn_crop_size)
+        self.rcnn_head = RcnnHead(cfg, crop_channels)
+        self.mask_crop = CropRoi(cfg, cfg.mask_crop_size)
+        self.mask_head = MaskHead(cfg, crop_channels)
+        self.depth_head = MaskDepthHead(cfg, crop_channels)
+
+    def forward(self, inputs, truth_boxes=None, truth_labels=None, truth_instances=None, truth_dir=None,
+                truth_depths=None):
+        cfg = self.cfg
+        mode = self.mode
+        batch_size = len(inputs)
+
+        # features
+        features = data_parallel(self.feature_net, inputs)
+
+        # rpn proposals -------------------------------------------
+        self.rpn_logits_flat, self.rpn_deltas_flat = data_parallel(self.rpn_head, features)
+        self.rpn_window = make_rpn_windows(cfg, features)
+        self.rpn_proposals = rpn_nms(cfg, mode, inputs, self.rpn_window, self.rpn_logits_flat, self.rpn_deltas_flat)
+
+        if mode in ['train', 'valid']:
+            self.rpn_labels, self.rpn_label_assigns, self.rpn_label_weights, self.rpn_targets, self.rpn_target_weights = \
+                make_rpn_target(cfg, inputs, self.rpn_window, truth_boxes, truth_labels)
+
+            self.rpn_proposals, self.rcnn_labels, self.rcnn_assigns, self.rcnn_targets = \
+                make_rcnn_target(cfg, mode, inputs, self.rpn_proposals, truth_boxes, truth_labels)
+
+        # rcnn proposals ------------------------------------------------
+        self.rcnn_proposals = self.rpn_proposals
+        if len(self.rpn_proposals) > 0:
+            rcnn_crops = self.rcnn_crop(features, self.rpn_proposals)
+            self.rcnn_logits, self.rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
+            self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals, self.rcnn_logits,
+                                           self.rcnn_deltas)
+
+        if mode in ['train', 'valid']:
+            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances, self.dir_instances, self.depth_instances, = \
+                make_depth_target(cfg, inputs, self.rcnn_proposals, truth_boxes, truth_labels, truth_instances,
+                                  truth_depths)
+
+        # segmentation  -------------------------------------------
+        self.detections = self.rcnn_proposals
+        self.masks = make_empty_masks(cfg, mode, inputs)
+        self.depths = make_empty_depths(inputs)
+
+        if len(self.rcnn_proposals) > 0:
+            mask_crops = self.mask_crop(features, self.detections)
+            self.mask_logits = data_parallel(self.mask_head, mask_crops)
+            # self.masks = mask_nms(cfg, mode, inputs, self.rcnn_proposals, self.mask_logits) #<todo> better nms for
+            self.depth_logits, self.depth_argmax = data_parallel(self.depth_head, mask_crops)
+            self.masks, self.depths_resize = depth_revert(cfg, inputs, self.rcnn_proposals, self.mask_logits,
+                                                          self.depth_argmax)
+            self.depths = depth_merge(cfg, inputs, self.rcnn_proposals, self.depth_argmax)
+
+    def loss(self):
+        cfg = self.cfg
+
+        self.rpn_cls_loss, self.rpn_reg_loss = \
+            rpn_loss(self.rpn_logits_flat, self.rpn_deltas_flat, self.rpn_labels, self.rpn_label_weights,
+                     self.rpn_targets, self.rpn_target_weights)
+
+        self.rcnn_cls_loss, self.rcnn_reg_loss = \
+            rcnn_loss(self.rcnn_logits, self.rcnn_deltas, self.rcnn_labels, self.rcnn_targets)
+
+        self.mask_cls_loss = \
+            mask_loss(self.mask_logits, self.mask_labels, self.mask_instances)
 
         self.depth_loss = depth_loss(self.depth_logits, self.mask_labels, self.depth_instances)
 

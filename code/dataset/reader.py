@@ -219,6 +219,7 @@ def instance_to_multi_mask(instance):
 
     return multi_mask
 
+
 boundaries = [0,1,2,3,4,5,7,9,12,15,19,24,30,37,45,10000]
 def multi_mask_to_depth_map(multi_mask):
     H, W = multi_mask.shape[:2]
@@ -229,6 +230,7 @@ def multi_mask_to_depth_map(multi_mask):
     for i in range(1, len(boundaries)):
         depth_map[(depth_map > boundaries[i-1]) & (depth_map <= boundaries[i])] = i
     return depth_map
+
 
 def instance_to_depth_map(instance):
     H, W = instance.shape[1:3]
@@ -241,6 +243,16 @@ def instance_to_depth_map(instance):
     for i in range(1, len(boundaries)):
         depth_map[(depth_map > boundaries[i - 1]) & (depth_map <= boundaries[i])] = i
     return depth_map
+
+
+def multi_mask_to_imgradient(multi_mask):
+    semantic_map = np.zeros(multi_mask.shape, np.int32)
+    semantic_map[multi_mask > 0] = 1
+    depth_map = distance_transform_edt(semantic_map)
+    direction_map = np.zeros((depth_map.shape + (2,)))
+    direction_map[:, :, 0] = cv2.Sobel(depth_map, cv2.CV_64F, 1, 0)
+    direction_map[:, :, 1] = cv2.Sobel(depth_map, cv2.CV_64F, 0, 1)
+    return direction_map/direction_map.max()
 
 
 ##------------------------------------------------------
@@ -369,8 +381,11 @@ if __name__ == '__main__':
     dataset = ScienceDataset('train1_train_603', img_folder='train1_norm', mask_folder='stage1_train', mode='train', transform=train_augment)
 
     for inputs, images, truth_boxes, truth_labels, truth_instances, metas, indices in dataset:
+        mask = instance_to_multi_mask(truth_instances)
+        dir = multi_mask_to_imgradient(mask)
+        plt.imshow(dir[:,:,0])
+        plt.show()
         print()
-#        multi_mask_to_depth_map(mask)
 
 
     print('sucess!')

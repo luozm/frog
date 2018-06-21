@@ -43,6 +43,16 @@ def depth_loss(logits, labels, instances):
     return loss
 
 
+def dir_loss(logits, labels, instances):
+    logits = logits.permute(0, 2, 3, 1).contiguous()
+    logits_flat = logits.view(-1, 2)
+#    logits_flat = logits_flat.view(-1).float()
+    labels_flat = instances.view(-1, 2).float()
+
+    errorAngles = torch.acos(torch.sum(logits_flat*labels_flat, 1))
+    loss = torch.sum(errorAngles*errorAngles)/errorAngles.shape[0]
+    return loss
+
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))

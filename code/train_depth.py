@@ -19,7 +19,7 @@ from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 from utility.file import Logger, time_to_str
 from utility.draw import image_show, image_show_color
-from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_depth_map, multi_mask_to_depth_map
+from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_depth_map, multi_mask_to_imgradient
 from net.learning_rate import get_learning_rate, adjust_learning_rate, StepLR
 from net.se_resnext50_mask_rcnn_depth.configuration import Configuration
 from net.se_resnext50_mask_rcnn_depth.se_resnext50_mask_rcnn_depth import MaskDepthNet
@@ -69,8 +69,9 @@ def train_augment(image, multi_mask, meta, index):
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask_crop)
     depth = instance_to_depth_map(instance)
+    dir = multi_mask_to_imgradient(multi_mask)
 
-    return image_norm, image_crop, box, label, instance, depth, meta, index
+    return image_norm, image_crop, box, label, instance, dir, depth, meta, index
 
 
 def valid_augment(image, multi_mask, meta, index):
@@ -87,8 +88,9 @@ def valid_augment(image, multi_mask, meta, index):
     image_norm = torch.from_numpy(image_norm.transpose((2, 0, 1))).float()#.div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
     depth = instance_to_depth_map(instance)
+    dir = multi_mask_to_imgradient(multi_mask)
 
-    return image_norm, image, box, label, instance, depth, meta, index
+    return image_norm, image, box, label, instance, dir, depth, meta, index
 
 
 def train_collate(batch):
@@ -103,11 +105,12 @@ def train_collate(batch):
     boxes = [batch[b][2] for b in range(batch_size)]
     labels = [batch[b][3] for b in range(batch_size)]
     instances = [batch[b][4] for b in range(batch_size)]
-    depths = [batch[b][5] for b in range(batch_size)]
-    metas = [batch[b][6] for b in range(batch_size)]
-    indices = [batch[b][7] for b in range(batch_size)]
+    dirs = [batch[b][5] for b in range(batch_size)]
+    depths = [batch[b][6] for b in range(batch_size)]
+    metas = [batch[b][7] for b in range(batch_size)]
+    indices = [batch[b][8] for b in range(batch_size)]
 
-    return [inputs, images, boxes, labels, instances, depths, metas, indices]
+    return [inputs, images, boxes, labels, instances, dirs, depths, metas, indices]
 
 
 def evaluate(net, test_loader):
@@ -121,11 +124,11 @@ def evaluate(net, test_loader):
     test_num = 0
     test_loss = np.zeros(7, np.float32)
 
-    for i, (inputs, images, truth_boxes, truth_labels, truth_instances, truth_depths, metas, indices) in enumerate(test_loader, 0):
+    for i, (inputs, images, truth_boxes, truth_labels, truth_instances, truth_dirs, truth_depths, metas, indices) in enumerate(test_loader, 0):
 
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes,  truth_labels, truth_instances, truth_depths)
+            net(inputs, truth_boxes,  truth_labels, truth_instances, truth_dirs, truth_depths)
             loss = net.loss()
 
         # acc    = dice_loss(masks, labels) #todo
@@ -193,7 +196,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     # ---------------------------------------------------------------------------
 
     iter_accum = 1
-    batch_size = 3
+    batch_size = 2
 
     num_iters = 100000
     iter_smooth = 20
@@ -299,7 +302,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
         net.set_mode('train')
         optimizer.zero_grad()
-        for inputs, images, truth_boxes, truth_labels, truth_instances, truth_depths, metas, indices in train_loader:
+        for inputs, images, truth_boxes, truth_labels, truth_instances, truth_dirs, truth_depths, metas, indices in train_loader:
             if all(len(b) == 0 for b in truth_boxes):
                 continue
 
@@ -350,7 +353,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
             # one iteration update  -------------
             inputs = Variable(inputs).cuda()
-            net(inputs, truth_boxes, truth_labels, truth_instances, truth_depths)
+            net(inputs, truth_boxes, truth_labels, truth_instances, truth_dirs, truth_depths)
             loss = net.loss()
 
             # accumulated update
@@ -393,7 +396,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
 
                 net.set_mode('test')
                 with torch.no_grad():
-                    net(inputs, truth_boxes, truth_labels, truth_instances, truth_depths)
+                    net(inputs, truth_boxes, truth_labels, truth_instances, truth_dirs, truth_depths)
 
                 batch_size, C, H, W = inputs.size()
 #                images = inputs.data.cpu().numpy()
@@ -505,7 +508,7 @@ if __name__ == '__main__':
 
     run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
               out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-depth-train500-train500-norm-01',
-              resume_checkpoint=RESULTS_DIR + '/mask-rcnn-se-resnext50-depth-train500-train500-norm-01/checkpoint/00066000_model.pth',
+              pretrain_file=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
               show_train_img=True)
 
     print('\nsucess!')

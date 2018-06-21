@@ -21,8 +21,10 @@ def image_show_color(name, image, resize=1):
     image[image > 255] = 255
     # image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     image = cv2.applyColorMap(image, cv2.COLORMAP_JET)
+
     cv2.imshow(name, image.astype(np.uint8))
     cv2.resizeWindow(name, round(resize*W), round(resize*H))
+    return image
 
 
 def draw_shadow_text(img, text, pt,  fontScale, color, thickness, color1=None, thickness1=None):

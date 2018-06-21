@@ -30,8 +30,8 @@ def add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label, score=-1
 # mask target ********************************************************************
 #<todo> mask crop should match align kernel (same wait to handle non-integer pixel location (e.g. 23.5, 32.1))
 def crop_instance(instance, box, size, threshold=0.5):
-    if len(instance.shape) == 2:
-        H, W = instance.shape
+    if 1:# len(instance.shape) == 2:
+        H, W = instance.shape[0:2]
         x0, y0, x1, y1 = np.rint(box).astype(np.int32)
         x0 = max(0, x0)
         y0 = max(0, y0)
@@ -56,44 +56,45 @@ def crop_instance(instance, box, size, threshold=0.5):
         crop = cv2.resize(crop, (size, size), interpolation=cv2.INTER_LINEAR)
         #crop = (crop > threshold).astype(np.float32)
         return crop
-    H, W = instance.shape[1:]
-    x0, y0, x1, y1 = np.rint(box).astype(np.int32)
-    x0 = max(0, x0)
-    y0 = max(0, y0)
-    x1 = min(W, x1)
-    y1 = min(H, y1)
-
-    #<todo> filter this
-    if 1:
-        if x0 == x1:
-            x0 = x0-1
-            x1 = x1+1
-            x0 = max(0, x0)
-            x1 = min(W, x1)
-        if y0 == y1:
-            y0 = y0-1
-            y1 = y1+1
-            y0 = max(0, y0)
-            y1 = min(H, y1)
-
-    #print(x0,y0,x1,y1)
-    crop = np.transpose(instance, (1, 2, 0))
-    crop = np.array(crop[y0:y1+1, x0:x1+1],np.float32)
-    crop = cv2.resize(crop, (size, size))
-    #crop = (crop > threshold).astype(np.float32)
-    return np.transpose(crop, (2, 0, 1))
+    # H, W = instance.shape[1:]
+    # x0, y0, x1, y1 = np.rint(box).astype(np.int32)
+    # x0 = max(0, x0)
+    # y0 = max(0, y0)
+    # x1 = min(W, x1)
+    # y1 = min(H, y1)
+    #
+    # #<todo> filter this
+    # if 1:
+    #     if x0 == x1:
+    #         x0 = x0-1
+    #         x1 = x1+1
+    #         x0 = max(0, x0)
+    #         x1 = min(W, x1)
+    #     if y0 == y1:
+    #         y0 = y0-1
+    #         y1 = y1+1
+    #         y0 = max(0, y0)
+    #         y1 = min(H, y1)
+    #
+    # #print(x0,y0,x1,y1)
+    # crop = np.transpose(instance, (1, 2, 0))
+    # crop = np.array(crop[y0:y1+1, x0:x1+1],np.float32)
+    # crop = cv2.resize(crop, (size, size))
+    # #crop = (crop > threshold).astype(np.float32)
+    # return np.transpose(crop, (2, 0, 1))
 
 
 # cpu version
-def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_instance, truth_depth_map):
+def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_instance, truth_dir_map, truth_depth_map):
 
     sampled_proposal = Variable(torch.FloatTensor(0, 7)).cuda()
     sampled_label = Variable(torch.LongTensor(0, 1)).cuda()
     sampled_instance = Variable(torch.FloatTensor(0, 1, 1)).cuda()
+    sampled_dir_map = Variable(torch.FloatTensor(0, 1, 1)).cuda()
     sampled_depth_map = Variable(torch.FloatTensor(0, 1, 1)).cuda()
 
     if len(truth_box) == 0 or len(proposal) == 0:
-        return sampled_proposal, sampled_label, sampled_instance, sampled_depth_map
+        return sampled_proposal, sampled_label, sampled_instance, sampled_dir_map, sampled_depth_map
 
     # filter invalid proposal ---------------
     _, height, width = input.size()
@@ -120,7 +121,7 @@ def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_in
     fg_index = np.where(max_overlap >= cfg.mask_train_fg_thresh_low)[0]
 
     if len(fg_index) == 0:
-        return sampled_proposal, sampled_label, sampled_instance, sampled_depth_map
+        return sampled_proposal, sampled_label, sampled_instance, sampled_dir_map, sampled_depth_map
 
     # <todo> sampling for class balance
     fg_length = len(fg_index)
@@ -133,16 +134,19 @@ def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_in
     sampled_assign = argmax_overlap[fg_index]
     sampled_label = truth_label[sampled_assign]
     sampled_instance = []
+    sampled_dir_map = []
     sampled_depth_map = []
     for i in range(len(fg_index)):
         depth = truth_depth_map
         instance = truth_instance[sampled_assign[i]]
         box = sampled_proposal[i, 1:5]
+        crop_dir = crop_instance(truth_dir_map, box, cfg.mask_size)
         crop_depth = crop_instance(depth, box, cfg.mask_size)
         crop_ins = crop_instance(instance, box, cfg.mask_size)
         #plt.imshow(crop_depth)
         #plt.show()
         sampled_instance.append(crop_ins[np.newaxis, :, :])
+        sampled_dir_map.append(crop_dir[np.newaxis, :, :])
         sampled_depth_map.append(crop_depth[np.newaxis, :, :])
 
         # <debug>
@@ -156,22 +160,25 @@ def make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_in
             cv2.waitKey(0)
 
     sampled_instance = np.vstack(sampled_instance)
+    sampled_dir_map = np.vstack(sampled_dir_map)
     sampled_depth_map = np.vstack(sampled_depth_map)
 
     # save
     sampled_proposal = Variable(torch.from_numpy(sampled_proposal)).cuda()
     sampled_label = Variable(torch.from_numpy(sampled_label)).long().cuda()
     sampled_instance=Variable(torch.from_numpy(sampled_instance)).cuda()
+    sampled_dir_map = Variable(torch.from_numpy(sampled_dir_map)).cuda()
     sampled_depth_map = Variable(torch.from_numpy(sampled_depth_map)).cuda()
-    return sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_depth_map
+    return sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_dir_map, sampled_depth_map
 
 
-def make_depth_target(cfg, inputs, proposals, truth_boxes, truth_labels, truth_instances, truth_depth_maps):
+def make_depth_target(cfg, inputs, proposals, truth_boxes, truth_labels, truth_instances, truth_dir_maps, truth_depth_maps):
 
     # <todo> take care of don't care ground truth. Here, we only ignore them  ---
     truth_boxes = copy.deepcopy(truth_boxes)
     truth_labels = copy.deepcopy(truth_labels)
     truth_instances = copy.deepcopy(truth_instances)
+    truth_dir_maps = copy.deepcopy(truth_dir_maps)
     truth_depth_maps = copy.deepcopy(truth_depth_maps)
     batch_size = len(inputs)
     for b in range(batch_size):
@@ -186,6 +193,7 @@ def make_depth_target(cfg, inputs, proposals, truth_boxes, truth_labels, truth_i
     sampled_labels = []
     sampled_assigns = []
     sampled_instances = []
+    sampled_dir_maps = []
     sampled_depth_maps = []
 
     batch_size = len(truth_boxes)
@@ -194,6 +202,7 @@ def make_depth_target(cfg, inputs, proposals, truth_boxes, truth_labels, truth_i
         truth_box = truth_boxes[b]
         truth_label = truth_labels[b]
         truth_instance = truth_instances[b]
+        truth_dir_map = truth_dir_maps[b]
         truth_depth_map = truth_depth_maps[b]
 
         if len(truth_box) != 0:
@@ -203,21 +212,23 @@ def make_depth_target(cfg, inputs, proposals, truth_boxes, truth_labels, truth_i
                 proposal = proposals[proposals[:, 0] == b]
 
             proposal = add_truth_box_to_proposal(cfg, proposal, b, truth_box, truth_label)
-            sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_depth_map = \
-                make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_instance, truth_depth_map)
+            sampled_proposal, sampled_label, sampled_assign, sampled_instance, sampled_dir_map, sampled_depth_map = \
+                make_one_depth_target(cfg, input, proposal, truth_box, truth_label, truth_instance, truth_dir_map, truth_depth_map)
 
             sampled_proposals.append(sampled_proposal)
             sampled_labels.append(sampled_label)
             sampled_assigns.append(sampled_assign)
             sampled_instances.append(sampled_instance)
+            sampled_dir_maps.append(sampled_dir_map)
             sampled_depth_maps.append(sampled_depth_map)
 
     sampled_proposals = torch.cat(sampled_proposals, 0)
     sampled_labels = torch.cat(sampled_labels, 0)
     sampled_instances = torch.cat(sampled_instances, 0)
+    sampled_dir_maps = torch.cat(sampled_dir_maps, 0)
     sampled_depth_maps = torch.cat(sampled_depth_maps, 0)
 
-    return sampled_proposals, sampled_labels, sampled_assigns, sampled_instances, sampled_depth_maps
+    return sampled_proposals, sampled_labels, sampled_assigns, sampled_instances, sampled_dir_maps, sampled_depth_maps
 
 
 # -----------------------------------------------------------------------------

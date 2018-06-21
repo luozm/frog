@@ -256,7 +256,7 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
     iter_accum = 1
     batch_size = 4
 
-    num_iters = 30000
+    num_iters = 3000
     iter_smooth = 20
     iter_log = 50
     iter_valid = 150
@@ -292,7 +292,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
         img_folder='train1_norm',
         mask_folder='stage1_train',
         mode='train',
-        transform=train_augment_new)
+#        transform=train_augment_new)
+        transform=valid_augment)
 
     train_loader = DataLoader(
         train_dataset,
@@ -469,8 +470,8 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                 masks = net.masks
 
                 #print('train',batch_size)
-                for b in range(1):
-#                for b in range(batch_size):
+#                for b in range(1):
+                for b in range(batch_size):
 
                     image = (images[b])#.transpose((1, 2, 0))*255)
                     image = image.astype(np.uint8)
@@ -543,9 +544,9 @@ def run_train(train_split, val_split, out_dir, resume_checkpoint=None, pretrain_
                     #cv2.imwrite(out_dir +'/train/%s.png'%name,summary)
                     #cv2.imwrite(out_dir +'/train/%05d.png'%b,summary)
 
-                    # cv2.imwrite(out_dir + '/train/%05d.rpn_precision.png' % b,  all5)
-                    # cv2.imwrite(out_dir + '/train/%05d.rcnn_precision..png' % b, all6)
-                    # cv2.imwrite(out_dir + '/train/%05d.mask_precision.png' % b,  all7)
+                    cv2.imwrite(out_dir + '/train/%s_%d.rpn_precision.png' % (name,epoch),  all5)
+                    cv2.imwrite(out_dir + '/train/%s_%d.rcnn_precision..png' % (name,epoch), all6)
+                    cv2.imwrite(out_dir + '/train/%s_%d.mask_precision.png' % (name,epoch),  all7)
                     cv2.waitKey(1)
 
                 net.set_mode('train')
@@ -569,8 +570,8 @@ if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
     run_train(train_split='train1_ids_gray2_500_nofolder', val_split='valid1_ids_gray2_43_nofolder',
-              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-02',
-              pretrain_file=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
+              out_dir=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-03',
+#              pretrain_file=RESULTS_DIR + '/mask-rcnn-se-resnext50-train500-norm-01/checkpoint/70124_model.pth',
               show_train_img=True)
 
     print('\nsucess!')
