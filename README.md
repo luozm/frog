@@ -1,4 +1,4 @@
-# Mask R-CNN based on Heng CherKeng's code
+# Mask R-CNN
 
 ## Data
 1. Download
@@ -38,3 +38,4 @@
 * ...
 
 ## Citations
+* Thanks to Heng CherKeng for his outstanding work!
