@@ -1,4 +1,4 @@
-# Mask R-CNN
+# Mask R-CNN with watershed head
 
 ## Data
 1. Download
@@ -38,4 +38,4 @@
 * ...
 
 ## Citations
-* Thanks to Heng CherKeng for his outstanding work!
+* Thanks to [Heng CherKeng](https://www.kaggle.com/c/data-science-bowl-2018/discussion/47686) for his outstanding work!
